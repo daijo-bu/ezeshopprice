@@ -192,27 +192,29 @@ bot.on('error', (error) => {
   console.error('Bot error:', error);
 });
 
-process.on('SIGINT', () => {
-  console.log('Received SIGINT, shutting down bot gracefully...');
-  bot.stopPolling().then(() => {
+async function gracefulShutdown(signal) {
+  console.log(`Received ${signal}, shutting down gracefully...`);
+  
+  try {
+    // Stop the HTTP server
+    await new Promise((resolve) => {
+      server.close(resolve);
+    });
+    console.log('HTTP server stopped');
+    
+    // Stop bot polling
+    await bot.stopPolling();
     console.log('Bot polling stopped');
+    
     process.exit(0);
-  }).catch(err => {
-    console.error('Error stopping polling:', err);
+  } catch (err) {
+    console.error('Error during shutdown:', err);
     process.exit(1);
-  });
-});
+  }
+}
 
-process.on('SIGTERM', () => {
-  console.log('Received SIGTERM, shutting down bot gracefully...');
-  bot.stopPolling().then(() => {
-    console.log('Bot polling stopped');
-    process.exit(0);
-  }).catch(err => {
-    console.error('Error stopping polling:', err);
-    process.exit(1);
-  });
-});
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
@@ -229,6 +231,28 @@ if (!process.env.TELEGRAM_BOT_TOKEN) {
   console.error('📝 Please create a .env file with your bot token');
   process.exit(1);
 }
+
+// Add a simple HTTP server for Railway health checks
+const http = require('http');
+const port = process.env.PORT || 3000;
+
+const server = http.createServer((req, res) => {
+  if (req.url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ 
+      status: 'healthy', 
+      bot: 'running',
+      timestamp: new Date().toISOString()
+    }));
+  } else {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Nintendo eShop Price Bot is running! 🎮');
+  }
+});
+
+server.listen(port, () => {
+  console.log(`🌐 HTTP server listening on port ${port}`);
+});
 
 console.log('🤖 Nintendo eShop Price Bot is running...');
 console.log('🔍 Ready to search for game prices across all regions!');
