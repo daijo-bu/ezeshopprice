@@ -60,9 +60,39 @@ initializeBot();
 
 bot.on('polling_error', (error) => {
   console.error('❌ Polling error:', error.code, error.message);
+  
   if (error.response) {
     console.error('Response status:', error.response.statusCode);
     console.error('Response body:', error.response.body);
+    
+    // Handle specific Telegram API errors
+    if (error.response.body && error.response.body.error_code === 409) {
+      console.error('🚨 CONFLICT: Another bot instance is running!');
+      console.error('This usually means:');
+      console.error('1. Multiple Railway deployments are active');
+      console.error('2. Local bot is still running');
+      console.error('3. Previous deployment didn\'t stop properly');
+      console.error('');
+      console.error('💡 Solutions:');
+      console.error('- Stop any local bot instances');
+      console.error('- Check Railway deployments tab');
+      console.error('- Wait 1-2 minutes and restart');
+      
+      // Try to recover after a delay
+      setTimeout(() => {
+        console.log('🔄 Attempting to restart polling...');
+        bot.stopPolling().then(() => {
+          return new Promise(resolve => setTimeout(resolve, 5000));
+        }).then(() => {
+          return bot.startPolling();
+        }).then(() => {
+          console.log('✅ Polling restarted successfully');
+        }).catch(err => {
+          console.error('❌ Failed to restart polling:', err.message);
+          process.exit(1);
+        });
+      }, 10000);
+    }
   }
 });
 
@@ -254,5 +284,7 @@ server.listen(port, () => {
   console.log(`🌐 HTTP server listening on port ${port}`);
 });
 
+const instanceId = Math.random().toString(36).substr(2, 9);
 console.log('🤖 Nintendo eShop Price Bot is running...');
+console.log(`🆔 Instance ID: ${instanceId}`);
 console.log('🔍 Ready to search for game prices across all regions!');
