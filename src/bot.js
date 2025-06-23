@@ -1,5 +1,5 @@
 const TelegramBot = require('node-telegram-bot-api');
-const { searchGame } = require('./eshopScraper_hybrid');
+const { searchGames, searchGameByNSUID } = require('./eshopScraper_real_only');
 const { formatPricesMessage, validateGameName, sanitizeGameName } = require('./utils');
 require('dotenv').config();
 
@@ -132,30 +132,48 @@ bot.onText(/\/price (.+)/, async (msg, match) => {
   
   const gameName = sanitizeGameName(rawGameName);
   
-  const searchingMessage = await bot.sendMessage(chatId, `🔍 Searching for "${gameName}" across all regions...\n⏳ This may take up to 30 seconds.`);
+  const searchingMessage = await bot.sendMessage(chatId, `🔍 Searching Nintendo eShop for "${gameName}"...\n⏳ Finding real prices only.`);
   
   try {
-    const prices = await searchGame(gameName);
+    const result = await searchGames(gameName);
     
     await bot.deleteMessage(chatId, searchingMessage.message_id).catch(() => {});
     
-    if (prices.length === 0) {
-      bot.sendMessage(chatId, `❌ No prices found for "${gameName}".\n\n💡 Try:\n• Using the exact game title\n• Checking spelling\n• Using fewer words\n\nExample: /price "Zelda Breath Wild"`);
-      return;
-    }
-    
-    const message = formatPricesMessage(gameName, prices);
-    
-    if (message.length > 4096) {
-      const chunks = splitMessage(message, 4096);
-      for (let i = 0; i < chunks.length; i++) {
-        await bot.sendMessage(chatId, chunks[i], { parse_mode: 'Markdown' });
-        if (i < chunks.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+    switch (result.type) {
+      case 'no_results':
+        bot.sendMessage(chatId, `❌ ${result.message}\n\n💡 Try:\n• Using the exact game title\n• Checking spelling\n• Using fewer words\n\nExample: /price "Mario Kart 8"`);
+        break;
+        
+      case 'no_prices':
+        bot.sendMessage(chatId, `🎮 *${result.game.title}*\n\n❌ ${result.message}`, { parse_mode: 'Markdown' });
+        break;
+        
+      case 'multiple_options':
+        await sendGameSelectionMessage(chatId, result);
+        break;
+        
+      case 'prices':
+        const message = formatPricesMessage(result.game.title, result.prices);
+        
+        if (message.length > 4096) {
+          const chunks = splitMessage(message, 4096);
+          for (let i = 0; i < chunks.length; i++) {
+            await bot.sendMessage(chatId, chunks[i], { parse_mode: 'Markdown' });
+            if (i < chunks.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+          }
+        } else {
+          bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
         }
-      }
-    } else {
-      bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+        break;
+        
+      case 'error':
+        bot.sendMessage(chatId, `❌ ${result.message}`);
+        break;
+        
+      default:
+        bot.sendMessage(chatId, '❌ Unexpected error occurred. Please try again.');
     }
     
   } catch (error) {
@@ -175,6 +193,108 @@ bot.onText(/\/price (.+)/, async (msg, match) => {
     
     bot.sendMessage(chatId, errorMessage);
   }
+});
+
+async function sendGameSelectionMessage(chatId, result) {
+  let message = `${result.message}\n\n`;
+  
+  const inlineKeyboard = result.games.map((game, index) => [{
+    text: `${index + 1}. ${game.title}`,
+    callback_data: `game_${game.nsuid}`
+  }]);
+  
+  // Add a cancel option
+  inlineKeyboard.push([{
+    text: '❌ Cancel',
+    callback_data: 'cancel_selection'
+  }]);
+  
+  result.games.forEach((game, index) => {
+    message += `${index + 1}. *${game.title}*\n`;
+    if (game.developer) message += `   Developer: ${game.developer}\n`;
+    if (game.publisher) message += `   Publisher: ${game.publisher}\n`;
+    message += '\n';
+  });
+  
+  bot.sendMessage(chatId, message, {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      inline_keyboard: inlineKeyboard
+    }
+  });
+}
+
+// Handle callback queries for game selection
+bot.on('callback_query', async (callbackQuery) => {
+  const chatId = callbackQuery.message.chat.id;
+  const messageId = callbackQuery.message.message_id;
+  const data = callbackQuery.data;
+  
+  if (data === 'cancel_selection') {
+    await bot.editMessageText('❌ Game selection cancelled.', {
+      chat_id: chatId,
+      message_id: messageId
+    });
+    await bot.answerCallbackQuery(callbackQuery.id);
+    return;
+  }
+  
+  if (data.startsWith('game_')) {
+    const nsuid = data.replace('game_', '');
+    
+    await bot.editMessageText('🔍 Getting prices for selected game...', {
+      chat_id: chatId,
+      message_id: messageId
+    });
+    
+    try {
+      const result = await searchGameByNSUID(nsuid);
+      
+      switch (result.type) {
+        case 'no_prices':
+          await bot.editMessageText(`🎮 *${result.game.title}*\n\n❌ ${result.message}`, {
+            chat_id: chatId,
+            message_id: messageId,
+            parse_mode: 'Markdown'
+          });
+          break;
+          
+        case 'prices':
+          await bot.deleteMessage(chatId, messageId).catch(() => {});
+          
+          const message = formatPricesMessage(result.game.title, result.prices);
+          
+          if (message.length > 4096) {
+            const chunks = splitMessage(message, 4096);
+            for (let i = 0; i < chunks.length; i++) {
+              await bot.sendMessage(chatId, chunks[i], { parse_mode: 'Markdown' });
+              if (i < chunks.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+              }
+            }
+          } else {
+            bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+          }
+          break;
+          
+        case 'error':
+          await bot.editMessageText(`❌ ${result.message}`, {
+            chat_id: chatId,
+            message_id: messageId
+          });
+          break;
+      }
+      
+    } catch (error) {
+      console.error('Error getting game prices:', error);
+      await bot.editMessageText('❌ Error getting game prices. Please try again.', {
+        chat_id: chatId,
+        message_id: messageId
+      });
+    }
+  }
+  
+  await bot.answerCallbackQuery(callbackQuery.id);
 });
 
 bot.onText(/\/help/, (msg) => {
