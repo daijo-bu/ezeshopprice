@@ -13,7 +13,12 @@
       "Bash(git push:*)",
       "Bash(git remote set-url:*)",
       "Bash(git config:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(npm install:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:favna.github.io)",
+      "Bash(find:*)",
+      "Bash(ls:*)"
     ],
     "deny": []
   }
