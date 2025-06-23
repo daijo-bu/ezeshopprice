@@ -10,6 +10,56 @@ const {
 const { convertToSGD } = require('./currencyConverter');
 
 // Enhanced region data with purchase difficulty and gift card availability
+// Smart search fallbacks for known problematic terms
+const SEARCH_FALLBACKS = {
+  'suikoden': ['Suikoden I', 'Suikoden HD', 'Suikoden Remaster', 'Suikoden I&II'],
+  'chrono': ['Chrono Trigger', 'Chrono Cross'],
+  'secret': ['Secret of Mana', 'Secret of Evermore'],
+  'trials': ['Trials of Mana', 'Trials Rising'],
+  'legend': ['Legend of Zelda', 'Legend of Mana'],
+  'tales': ['Tales of', 'Tales Arise', 'Tales Symphonia'],
+  'final': ['Final Fantasy'],
+  'dragon': ['Dragon Quest', 'Dragon Ball'],
+  'metal': ['Metal Slug', 'Metal Gear'],
+  'sonic': ['Sonic Hedgehog', 'Sonic Mania', 'Sonic Origins']
+};
+
+async function trySmartSearchFallbacks(originalSearch) {
+  const normalizedSearch = originalSearch.toLowerCase().trim();
+  
+  // Check if we have fallbacks for this search term
+  const fallbacks = SEARCH_FALLBACKS[normalizedSearch];
+  if (!fallbacks) return [];
+  
+  console.log(`[NINTENDO-LIB] Trying ${fallbacks.length} fallback searches for "${originalSearch}"`);
+  
+  for (const fallback of fallbacks) {
+    try {
+      console.log(`[NINTENDO-LIB] Trying fallback: "${fallback}"`);
+      const games = await getQueriedGamesAmerica(fallback, { hitsPerPage: 30 });
+      
+      if (games.length > 0) {
+        // Filter results to only include games that still match the original search intent
+        const relevantGames = games.filter(game => {
+          const title = (game.title || '').toLowerCase();
+          // Make sure the game title contains the original search term or is clearly related
+          return title.includes(normalizedSearch) || 
+                 calculateMatchScore(originalSearch, game.title) > 100;
+        });
+        
+        if (relevantGames.length > 0) {
+          console.log(`[NINTENDO-LIB] Found ${relevantGames.length} relevant games with fallback "${fallback}"`);
+          return relevantGames;
+        }
+      }
+    } catch (error) {
+      console.log(`[NINTENDO-LIB] Fallback "${fallback}" failed: ${error.message}`);
+    }
+  }
+  
+  return [];
+}
+
 const REGIONS = {
   'US': { code: 'US', currency: 'USD', name: 'United States', difficult: false, giftCards: true },
   'CA': { code: 'CA', currency: 'CAD', name: 'Canada', difficult: false, giftCards: true },
@@ -47,7 +97,16 @@ async function searchGames(gameName) {
   
   try {
     // Use the nintendo-switch-eshop library to search for games
-    const games = await getQueriedGamesAmerica(gameName, { hitsPerPage: 50 });
+    let games = await getQueriedGamesAmerica(gameName, { hitsPerPage: 50 });
+    
+    // If no results, try smart fallbacks for known problematic searches
+    if (games.length === 0) {
+      const fallbackResults = await trySmartSearchFallbacks(gameName);
+      if (fallbackResults.length > 0) {
+        games = fallbackResults;
+        console.log(`[NINTENDO-LIB] Found ${games.length} games using smart fallback search`);
+      }
+    }
     
     if (games.length === 0) {
       return { type: 'no_results', message: `No games found for "${gameName}". Try a different search term or check spelling.` };
@@ -283,22 +342,64 @@ async function findRegionalNSUIDs(gameTitle, originalNSUID) {
     americas: originalNSUID // Start with the original NSUID as Americas fallback
   };
   
-  // For Mario Kart 8 Deluxe, use known regional NSUIDs (these are verified to work)
-  if (gameTitle.toLowerCase().includes('mario kart') && gameTitle.toLowerCase().includes('8') && gameTitle.toLowerCase().includes('deluxe')) {
-    console.log(`[NINTENDO-LIB] Using known Mario Kart 8 Deluxe NSUIDs`);
-    regionalNSUIDs.americas = '70010000000153'; // Known Americas NSUID
-    regionalNSUIDs.europe = '70010000000126';   // Known Europe NSUID
-    regionalNSUIDs.asia = '70010000000186';     // Known Asia NSUID
-    
-    console.log(`[NINTENDO-LIB] Mario Kart 8 Deluxe NSUIDs - Americas: ${regionalNSUIDs.americas}, Europe: ${regionalNSUIDs.europe}, Asia: ${regionalNSUIDs.asia}`);
-    return regionalNSUIDs;
+  // Known regional NSUIDs for popular games (verified to work)
+  const knownNSUIDs = {
+    'mario kart 8 deluxe': {
+      americas: '70010000000153',
+      europe: '70010000000126',
+      asia: '70010000000186'
+    },
+    'super mario odyssey': {
+      americas: '70010000000554',
+      europe: '70010000000588',
+      asia: '70010000000619'
+    },
+    'zelda breath': {
+      americas: '70010000000025',
+      europe: '70010000000023',
+      asia: '70010000000026'
+    }
+  };
+  
+  // Check if this is a known game
+  const lowerTitle = gameTitle.toLowerCase();
+  for (const [key, nsuids] of Object.entries(knownNSUIDs)) {
+    if (lowerTitle.includes(key) || key.split(' ').every(word => lowerTitle.includes(word))) {
+      console.log(`[NINTENDO-LIB] Using known NSUIDs for ${key}`);
+      Object.assign(regionalNSUIDs, nsuids);
+      console.log(`[NINTENDO-LIB] Known NSUIDs - Americas: ${regionalNSUIDs.americas}, Europe: ${regionalNSUIDs.europe}, Asia: ${regionalNSUIDs.asia}`);
+      return regionalNSUIDs;
+    }
   }
   
   try {
-    // Search Americas using the proper queried search function
+    // Multi-strategy search for each region
+    const searchStrategies = [
+      gameTitle,
+      gameTitle.replace(/[^\w\s]/g, ''), // Remove special characters
+      gameTitle.split(':')[0].trim(),    // Take part before colon
+      gameTitle.split('-')[0].trim(),    // Take part before dash
+      gameTitle.split(' ').slice(0, 3).join(' ') // First 3 words
+    ].filter((term, index, arr) => arr.indexOf(term) === index && term.length > 2);
+    
+    console.log(`[NINTENDO-LIB] Using ${searchStrategies.length} search strategies: ${searchStrategies.join(', ')}`);
+    
+    // Search Americas using multiple strategies
     console.log(`[NINTENDO-LIB] Searching Americas using getQueriedGamesAmerica...`);
-    const americanGames = await getQueriedGamesAmerica(gameTitle, { hitsPerPage: 50 });
-    const bestAmericanMatch = findBestMatch(gameTitle, americanGames);
+    let bestAmericanMatch = null;
+    
+    for (const searchTerm of searchStrategies) {
+      try {
+        const americanGames = await getQueriedGamesAmerica(searchTerm, { hitsPerPage: 30 });
+        bestAmericanMatch = findBestMatch(gameTitle, americanGames);
+        if (bestAmericanMatch) {
+          console.log(`[NINTENDO-LIB] Found Americas match using "${searchTerm}"`);
+          break;
+        }
+      } catch (err) {
+        console.log(`[NINTENDO-LIB] Americas search failed for "${searchTerm}": ${err.message}`);
+      }
+    }
     
     if (bestAmericanMatch) {
       // Use parseNSUID to properly extract the NSUID
@@ -309,30 +410,47 @@ async function findRegionalNSUIDs(gameTitle, originalNSUID) {
       }
     }
     
-    // Search Brazil for potentially different NSUID
+    // Search Brazil for potentially different NSUID using multiple strategies
     console.log(`[NINTENDO-LIB] Searching Brazil using getQueriedGamesBrazil...`);
-    try {
-      const brazilGames = await getQueriedGamesBrazil(gameTitle, { hitsPerPage: 30 });
-      const bestBrazilMatch = findBestMatch(gameTitle, brazilGames);
-      
-      if (bestBrazilMatch) {
-        const brazilNSUID = parseNSUID(bestBrazilMatch, Region.AMERICAS); // Brazil uses Americas region
-        if (brazilNSUID && brazilNSUID !== regionalNSUIDs.americas) {
-          regionalNSUIDs.brazil = brazilNSUID;
-          console.log(`[NINTENDO-LIB] Brazil specific NSUID: ${brazilNSUID} for "${bestBrazilMatch.title}"`);
+    let bestBrazilMatch = null;
+    
+    for (const searchTerm of searchStrategies) {
+      try {
+        const brazilGames = await getQueriedGamesBrazil(searchTerm, { hitsPerPage: 30 });
+        bestBrazilMatch = findBestMatch(gameTitle, brazilGames);
+        if (bestBrazilMatch) {
+          console.log(`[NINTENDO-LIB] Found Brazil match using "${searchTerm}"`);
+          break;
         }
+      } catch (err) {
+        console.log(`[NINTENDO-LIB] Brazil search failed for "${searchTerm}": ${err.message}`);
       }
-    } catch (brazilError) {
-      console.log(`[NINTENDO-LIB] Error searching Brazilian games: ${brazilError.message}`);
     }
     
-    // Search Europe using the complete games list
+    if (bestBrazilMatch) {
+      const brazilNSUID = parseNSUID(bestBrazilMatch, Region.AMERICAS); // Brazil uses Americas region
+      if (brazilNSUID && brazilNSUID !== regionalNSUIDs.americas) {
+        regionalNSUIDs.brazil = brazilNSUID;
+        console.log(`[NINTENDO-LIB] Brazil specific NSUID: ${brazilNSUID} for "${bestBrazilMatch.title}"`);
+      }
+    }
+    
+    // Search Europe using the complete games list with multiple strategies
     console.log(`[NINTENDO-LIB] Searching Europe using getGamesEurope...`);
+    let bestEuropeanMatch = null;
+    
     try {
-      const europeanGames = await getGamesEurope({ limit: 1500, locale: 'en' });
+      const europeanGames = await getGamesEurope({ limit: 2000, locale: 'en' });
       console.log(`[NINTENDO-LIB] Searching through ${europeanGames.length} European games...`);
       
-      const bestEuropeanMatch = findBestMatch(gameTitle, europeanGames);
+      // Try each search strategy for Europe
+      for (const searchTerm of searchStrategies) {
+        bestEuropeanMatch = findBestMatchInList(searchTerm, europeanGames);
+        if (bestEuropeanMatch) {
+          console.log(`[NINTENDO-LIB] Found Europe match using "${searchTerm}"`);
+          break;
+        }
+      }
       
       if (bestEuropeanMatch) {
         const europeNSUID = parseNSUID(bestEuropeanMatch, Region.EUROPE);
@@ -347,20 +465,35 @@ async function findRegionalNSUIDs(gameTitle, originalNSUID) {
       console.log(`[NINTENDO-LIB] Error searching European games: ${euroError.message}`);
     }
     
-    // Search Japan/Asia using the complete games list
+    // Search Japan/Asia using the complete games list with multiple strategies
     console.log(`[NINTENDO-LIB] Searching Japan/Asia using getGamesJapan...`);
+    let bestJapaneseMatch = null;
+    
     try {
       const japaneseGames = await getGamesJapan();
       console.log(`[NINTENDO-LIB] Searching through ${japaneseGames.length} Japanese games...`);
       
-      // For Japanese games, try both English and Japanese title matching
-      let bestJapaneseMatch = findBestMatch(gameTitle, japaneseGames);
+      // Try each search strategy for Asia/Japan
+      for (const searchTerm of searchStrategies) {
+        bestJapaneseMatch = findBestMatchInList(searchTerm, japaneseGames);
+        if (bestJapaneseMatch) {
+          console.log(`[NINTENDO-LIB] Found Asia match using "${searchTerm}"`);
+          break;
+        }
+      }
       
       // Special handling for games that might have Japanese titles
-      if (!bestJapaneseMatch && gameTitle.toLowerCase().includes('mario kart')) {
-        bestJapaneseMatch = japaneseGames.find(game => 
-          game.title && game.title.includes('マリオカート')
-        );
+      if (!bestJapaneseMatch) {
+        const japaneseTerms = getJapaneseSearchTerms(gameTitle);
+        for (const japaneseTerm of japaneseTerms) {
+          bestJapaneseMatch = japaneseGames.find(game => 
+            game.title && game.title.includes(japaneseTerm)
+          );
+          if (bestJapaneseMatch) {
+            console.log(`[NINTENDO-LIB] Found Asia match using Japanese term "${japaneseTerm}"`);
+            break;
+          }
+        }
       }
       
       if (bestJapaneseMatch) {
@@ -407,6 +540,52 @@ function findBestMatch(searchTitle, games) {
     .sort((a, b) => b.score - a.score);
   
   return scoredGames.length > 0 ? scoredGames[0].game : null;
+}
+
+// Helper function to find best match in a pre-loaded list (for Europe/Asia)
+function findBestMatchInList(searchTitle, games) {
+  if (!games || games.length === 0) return null;
+  
+  const normalizedSearch = searchTitle.toLowerCase().trim();
+  
+  // Filter games that might match
+  const relevantGames = games.filter(game => {
+    if (!game.title) return false;
+    const title = game.title.toLowerCase();
+    return title.includes(normalizedSearch) || 
+           normalizedSearch.includes(title) ||
+           calculateMatchScore(searchTitle, game.title) > 500;
+  });
+  
+  if (relevantGames.length === 0) return null;
+  
+  // Find the best match among relevant games
+  const bestMatch = relevantGames
+    .map(game => ({
+      game,
+      score: calculateMatchScore(searchTitle, game.title)
+    }))
+    .sort((a, b) => b.score - a.score)[0];
+  
+  return bestMatch && bestMatch.score > 800 ? bestMatch.game : null;
+}
+
+// Helper function to get Japanese search terms for known games
+function getJapaneseSearchTerms(gameTitle) {
+  const lowerTitle = gameTitle.toLowerCase();
+  const japaneseTerms = [];
+  
+  // Known Japanese translations for popular games
+  if (lowerTitle.includes('mario kart')) japaneseTerms.push('マリオカート');
+  if (lowerTitle.includes('zelda')) japaneseTerms.push('ゼルダ');
+  if (lowerTitle.includes('pokemon')) japaneseTerms.push('ポケモン');
+  if (lowerTitle.includes('metroid')) japaneseTerms.push('メトロイド');
+  if (lowerTitle.includes('kirby')) japaneseTerms.push('カービィ');
+  if (lowerTitle.includes('splatoon')) japaneseTerms.push('スプラトゥーン');
+  if (lowerTitle.includes('xenoblade')) japaneseTerms.push('ゼノブレイド');
+  if (lowerTitle.includes('fire emblem')) japaneseTerms.push('ファイアーエムブレム');
+  
+  return japaneseTerms;
 }
 
 async function getPricesForGame(game) {

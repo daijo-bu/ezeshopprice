@@ -1,5 +1,5 @@
 const TelegramBot = require('node-telegram-bot-api');
-const { searchGames, searchGameByNSUID } = require('./eshopScraper');
+const { searchGames, searchGameByNSUID } = require('./eshopScraperCached');
 const { formatPricesMessage, validateGameName, sanitizeGameName } = require('./utils');
 require('dotenv').config();
 
