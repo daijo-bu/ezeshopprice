@@ -26,18 +26,37 @@ const bot = new TelegramBot(token, {
 
 console.log('🤖 TelegramBot instance created');
 
-// Check and clear any existing webhooks
-bot.getWebHookInfo().then(info => {
-  console.log('🌐 Webhook info:', info);
-  if (info.url) {
-    console.log('⚠️  Webhook is set, removing it to enable polling...');
-    return bot.deleteWebHook();
+// Initialize bot with error handling
+async function initializeBot() {
+  try {
+    // Test the bot token first
+    const me = await bot.getMe();
+    console.log('✅ Bot authenticated successfully:', me.username);
+    
+    // Check and clear any existing webhooks
+    const webhookInfo = await bot.getWebHookInfo();
+    console.log('🌐 Webhook info:', webhookInfo);
+    
+    if (webhookInfo.url) {
+      console.log('⚠️  Webhook is set, removing it to enable polling...');
+      await bot.deleteWebHook();
+      console.log('✅ Webhook cleared');
+    }
+    
+    console.log('✅ Bot initialization complete, polling started');
+    
+  } catch (error) {
+    console.error('❌ Bot initialization failed:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.statusCode);
+      console.error('Response body:', error.response.body);
+    }
+    process.exit(1);
   }
-}).then(() => {
-  console.log('✅ Webhook cleared, polling should work now');
-}).catch(error => {
-  console.error('❌ Error checking/clearing webhook:', error.message);
-});
+}
+
+// Initialize the bot
+initializeBot();
 
 bot.on('polling_error', (error) => {
   console.error('❌ Polling error:', error.code, error.message);
@@ -174,15 +193,35 @@ bot.on('error', (error) => {
 });
 
 process.on('SIGINT', () => {
-  console.log('Shutting down bot...');
-  bot.stopPolling();
-  process.exit(0);
+  console.log('Received SIGINT, shutting down bot gracefully...');
+  bot.stopPolling().then(() => {
+    console.log('Bot polling stopped');
+    process.exit(0);
+  }).catch(err => {
+    console.error('Error stopping polling:', err);
+    process.exit(1);
+  });
 });
 
 process.on('SIGTERM', () => {
-  console.log('Shutting down bot...');
-  bot.stopPolling();
-  process.exit(0);
+  console.log('Received SIGTERM, shutting down bot gracefully...');
+  bot.stopPolling().then(() => {
+    console.log('Bot polling stopped');
+    process.exit(0);
+  }).catch(err => {
+    console.error('Error stopping polling:', err);
+    process.exit(1);
+  });
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
 });
 
 if (!process.env.TELEGRAM_BOT_TOKEN) {
