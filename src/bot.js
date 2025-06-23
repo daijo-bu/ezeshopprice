@@ -41,6 +41,18 @@ async function initializeBot() {
       console.log('⚠️  Webhook is set, removing it to enable polling...');
       await bot.deleteWebHook();
       console.log('✅ Webhook cleared');
+      
+      // Wait a bit after clearing webhook
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    
+    // Clear any pending updates to avoid conflicts
+    console.log('📨 Clearing pending updates...');
+    try {
+      await bot.getUpdates({ offset: -1 });
+      console.log('✅ Pending updates cleared');
+    } catch (updateError) {
+      console.log('⚠️ Could not clear updates:', updateError.message);
     }
     
     console.log('✅ Bot initialization complete, polling started');
@@ -51,12 +63,32 @@ async function initializeBot() {
       console.error('Response status:', error.response.statusCode);
       console.error('Response body:', error.response.body);
     }
+    
+    // If it's a 409 conflict, wait and retry once
+    if (error.response?.statusCode === 409) {
+      console.log('🔄 409 Conflict detected, waiting 30 seconds and retrying...');
+      await new Promise(resolve => setTimeout(resolve, 30000));
+      
+      try {
+        await bot.deleteWebHook();
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await bot.getUpdates({ offset: -1 });
+        console.log('✅ Retry successful, bot should be ready now');
+        return;
+      } catch (retryError) {
+        console.error('❌ Retry failed:', retryError.message);
+      }
+    }
+    
     process.exit(1);
   }
 }
 
-// Initialize the bot
-initializeBot();
+// Add a startup delay to avoid conflicts with previous deployments
+console.log('⏳ Starting bot in 5 seconds to avoid conflicts...');
+setTimeout(() => {
+  initializeBot();
+}, 5000);
 
 bot.on('polling_error', (error) => {
   console.error('❌ Polling error:', error.code, error.message);
@@ -79,19 +111,35 @@ bot.on('polling_error', (error) => {
       console.error('- Wait 1-2 minutes and restart');
       
       // Try to recover after a delay
-      setTimeout(() => {
-        console.log('🔄 Attempting to restart polling...');
-        bot.stopPolling().then(() => {
-          return new Promise(resolve => setTimeout(resolve, 5000));
-        }).then(() => {
-          return bot.startPolling();
-        }).then(() => {
+      setTimeout(async () => {
+        console.log('🔄 Attempting to recover from 409 conflict...');
+        try {
+          // Stop current polling
+          await bot.stopPolling();
+          console.log('⏹️ Polling stopped');
+          
+          // Clear webhook and updates
+          await bot.deleteWebHook();
+          console.log('🧹 Webhook cleared');
+          
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          // Clear pending updates
+          await bot.getUpdates({ offset: -1 });
+          console.log('📨 Updates cleared');
+          
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Restart polling
+          await bot.startPolling();
           console.log('✅ Polling restarted successfully');
-        }).catch(err => {
-          console.error('❌ Failed to restart polling:', err.message);
+          
+        } catch (err) {
+          console.error('❌ Failed to recover from conflict:', err.message);
+          console.log('💀 Exiting to let Railway restart the container...');
           process.exit(1);
-        });
-      }, 10000);
+        }
+      }, 15000);
     }
   }
 });

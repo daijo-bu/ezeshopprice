@@ -18,7 +18,10 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:favna.github.io)",
       "Bash(find:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(curl:*)",
+      "Bash(rm:*)",
+      "Bash(git reset:*)"
     ],
     "deny": []
   }
