@@ -5,7 +5,11 @@ const {
   getGamesJapan,
   getPrices,
   parseNSUID,
-  Region
+  Region,
+  getShopsAmerica,
+  getShopsEurope,
+  getShopsAsia,
+  getActiveShops
 } = require('nintendo-switch-eshop');
 const { convertToSGD } = require('./currencyConverter');
 
@@ -60,37 +64,101 @@ async function trySmartSearchFallbacks(originalSearch) {
   return [];
 }
 
-const REGIONS = {
-  'US': { code: 'US', currency: 'USD', name: 'United States', difficult: false, giftCards: true },
-  'CA': { code: 'CA', currency: 'CAD', name: 'Canada', difficult: false, giftCards: true },
-  'MX': { code: 'MX', currency: 'MXN', name: 'Mexico', difficult: true, giftCards: true },
-  'BR': { code: 'BR', currency: 'BRL', name: 'Brazil', difficult: true, giftCards: true },
-  'AR': { code: 'AR', currency: 'ARS', name: 'Argentina', difficult: true, giftCards: true },
-  'CL': { code: 'CL', currency: 'CLP', name: 'Chile', difficult: true, giftCards: false },
-  'GB': { code: 'GB', currency: 'GBP', name: 'United Kingdom', difficult: false, giftCards: true },
-  'DE': { code: 'DE', currency: 'EUR', name: 'Germany', difficult: false, giftCards: true },
-  'FR': { code: 'FR', currency: 'EUR', name: 'France', difficult: false, giftCards: true },
-  'ES': { code: 'ES', currency: 'EUR', name: 'Spain', difficult: false, giftCards: true },
-  'IT': { code: 'IT', currency: 'EUR', name: 'Italy', difficult: false, giftCards: true },
-  'NL': { code: 'NL', currency: 'EUR', name: 'Netherlands', difficult: false, giftCards: true },
-  'BE': { code: 'BE', currency: 'EUR', name: 'Belgium', difficult: false, giftCards: false },
-  'AT': { code: 'AT', currency: 'EUR', name: 'Austria', difficult: false, giftCards: false },
-  'CH': { code: 'CH', currency: 'CHF', name: 'Switzerland', difficult: true, giftCards: false },
-  'NO': { code: 'NO', currency: 'NOK', name: 'Norway', difficult: true, giftCards: false },
-  'SE': { code: 'SE', currency: 'SEK', name: 'Sweden', difficult: false, giftCards: false },
-  'DK': { code: 'DK', currency: 'DKK', name: 'Denmark', difficult: false, giftCards: false },
-  'JP': { code: 'JP', currency: 'JPY', name: 'Japan', difficult: true, giftCards: true },
-  'AU': { code: 'AU', currency: 'AUD', name: 'Australia', difficult: false, giftCards: true },
-  'NZ': { code: 'NZ', currency: 'NZD', name: 'New Zealand', difficult: false, giftCards: false },
-  'SG': { code: 'SG', currency: 'SGD', name: 'Singapore', difficult: false, giftCards: false },
-  'HK': { code: 'HK', currency: 'HKD', name: 'Hong Kong', difficult: true, giftCards: true },
-  'KR': { code: 'KR', currency: 'KRW', name: 'South Korea', difficult: true, giftCards: false },
-  'TW': { code: 'TW', currency: 'TWD', name: 'Taiwan', difficult: true, giftCards: false },
-  'MY': { code: 'MY', currency: 'MYR', name: 'Malaysia', difficult: true, giftCards: false },
-  'TH': { code: 'TH', currency: 'THB', name: 'Thailand', difficult: true, giftCards: false },
-  'RU': { code: 'RU', currency: 'RUB', name: 'Russia', difficult: true, giftCards: true },
-  'ZA': { code: 'ZA', currency: 'ZAR', name: 'South Africa', difficult: true, giftCards: true }
+// Enhanced region metadata for purchase difficulty and gift card availability
+const REGION_METADATA = {
+  'US': { difficult: false, giftCards: true },
+  'CA': { difficult: false, giftCards: true },
+  'MX': { difficult: true, giftCards: true },
+  'BR': { difficult: true, giftCards: true },
+  'AR': { difficult: true, giftCards: true },
+  'CL': { difficult: true, giftCards: false },
+  'CO': { difficult: true, giftCards: false },
+  'PE': { difficult: true, giftCards: false },
+  'GB': { difficult: false, giftCards: true },
+  'DE': { difficult: false, giftCards: true },
+  'FR': { difficult: false, giftCards: true },
+  'ES': { difficult: false, giftCards: true },
+  'IT': { difficult: false, giftCards: true },
+  'NL': { difficult: false, giftCards: true },
+  'BE': { difficult: false, giftCards: false },
+  'AT': { difficult: false, giftCards: false },
+  'LU': { difficult: false, giftCards: false },
+  'CH': { difficult: true, giftCards: false },
+  'NO': { difficult: true, giftCards: false },
+  'SE': { difficult: false, giftCards: false },
+  'DK': { difficult: false, giftCards: false },
+  'FI': { difficult: false, giftCards: false },
+  'PL': { difficult: true, giftCards: false },
+  'CZ': { difficult: true, giftCards: false },
+  'SK': { difficult: true, giftCards: false },
+  'HU': { difficult: true, giftCards: false },
+  'SI': { difficult: true, giftCards: false },
+  'HR': { difficult: true, giftCards: false },
+  'BG': { difficult: true, giftCards: false },
+  'RO': { difficult: true, giftCards: false },
+  'EE': { difficult: true, giftCards: false },
+  'LV': { difficult: true, giftCards: false },
+  'LT': { difficult: true, giftCards: false },
+  'PT': { difficult: false, giftCards: true },
+  'GR': { difficult: true, giftCards: false },
+  'MT': { difficult: true, giftCards: false },
+  'CY': { difficult: true, giftCards: false },
+  'IE': { difficult: false, giftCards: false },
+  'RU': { difficult: true, giftCards: true },
+  'JP': { difficult: true, giftCards: true },
+  'AU': { difficult: false, giftCards: true },
+  'NZ': { difficult: false, giftCards: false },
+  'ZA': { difficult: true, giftCards: true }
 };
+
+// Cache for active shops (refresh every hour)
+let activeShopsCache = null;
+let shopsCacheExpiry = 0;
+
+async function getActiveShopsWithCache() {
+  const now = Date.now();
+  
+  // Return cached data if still valid (1 hour cache)
+  if (activeShopsCache && now < shopsCacheExpiry) {
+    console.log(`[NINTENDO-LIB] Using cached shops data (${activeShopsCache.length} shops)`);
+    return activeShopsCache;
+  }
+  
+  console.log(`[NINTENDO-LIB] Fetching fresh shops data from Nintendo API...`);
+  
+  try {
+    // Get all active shops from Nintendo's API
+    const allShops = await getActiveShops();
+    
+    // Enhance with our metadata
+    const enhancedShops = allShops.map(shop => ({
+      ...shop,
+      difficult: REGION_METADATA[shop.code]?.difficult || true,
+      giftCards: REGION_METADATA[shop.code]?.giftCards || false
+    }));
+    
+    // Cache the results for 1 hour
+    activeShopsCache = enhancedShops;
+    shopsCacheExpiry = now + (60 * 60 * 1000); // 1 hour
+    
+    console.log(`[NINTENDO-LIB] Cached ${enhancedShops.length} active shops from Nintendo API`);
+    console.log(`[NINTENDO-LIB] Available shops: ${enhancedShops.map(s => s.code).join(', ')}`);
+    
+    return enhancedShops;
+    
+  } catch (error) {
+    console.error(`[NINTENDO-LIB] Failed to fetch active shops: ${error.message}`);
+    
+    // If we have stale cached data, use it as fallback
+    if (activeShopsCache) {
+      console.log(`[NINTENDO-LIB] Using stale cached data as fallback`);
+      return activeShopsCache;
+    }
+    
+    // Last resort: return empty array
+    return [];
+  }
+}
 
 async function searchGames(gameName) {
   console.log(`[NINTENDO-LIB] Searching for games matching: ${gameName}`);
@@ -593,59 +661,67 @@ async function getPricesForGame(game) {
   
   const prices = [];
   
+  // Get all active shops dynamically from Nintendo's API
+  const activeShops = await getActiveShopsWithCache();
+  
+  if (activeShops.length === 0) {
+    console.log(`[NINTENDO-LIB] No active shops available`);
+    return [];
+  }
+  
+  console.log(`[NINTENDO-LIB] Checking prices across ${activeShops.length} active Nintendo eShops`);
+  
   // Find regional NSUIDs for comprehensive pricing
   const regionalNSUIDs = await findRegionalNSUIDs(game.title, game.nsuid);
   
-  // Strategy: Try original NSUID in ALL regions first, then use regional NSUIDs for regions that failed
-  const allRegionCodes = Object.keys(REGIONS);
+  // Phase 1: Try original NSUID in ALL active shops
+  console.log(`[NINTENDO-LIB] Phase 1: Testing original NSUID ${regionalNSUIDs.americas || game.nsuid} in all ${activeShops.length} shops...`);
   
-  console.log(`[NINTENDO-LIB] Phase 1: Testing original NSUID ${regionalNSUIDs.americas || game.nsuid} in all ${allRegionCodes.length} regions...`);
-  
-  // Phase 1: Try original NSUID everywhere
-  const phase1Promises = allRegionCodes.map(regionCode => 
-    fetchPriceForRegionWithNSUID(regionalNSUIDs.americas || game.nsuid, regionCode, game.title)
+  const phase1Promises = activeShops.map(shop => 
+    fetchPriceForShop(regionalNSUIDs.americas || game.nsuid, shop, game.title)
   );
   
   const phase1Results = await Promise.allSettled(phase1Promises);
-  const phase1SuccessRegions = [];
+  const phase1SuccessShops = [];
   
   phase1Results.forEach((result, index) => {
     if (result.status === 'fulfilled' && result.value) {
       prices.push(result.value);
-      phase1SuccessRegions.push(allRegionCodes[index]);
+      phase1SuccessShops.push(activeShops[index].code);
     }
   });
   
-  console.log(`[NINTENDO-LIB] Phase 1 completed: Found prices in ${phase1SuccessRegions.length} regions using original NSUID`);
+  console.log(`[NINTENDO-LIB] Phase 1 completed: Found prices in ${phase1SuccessShops.length} shops using original NSUID`);
   
-  // Phase 2: Try regional NSUIDs for regions that failed in Phase 1
-  const failedRegions = allRegionCodes.filter(code => !phase1SuccessRegions.includes(code));
+  // Phase 2: Try regional NSUIDs for shops that failed in Phase 1
+  const failedShops = activeShops.filter(shop => !phase1SuccessShops.includes(shop.code));
   
-  if (failedRegions.length > 0 && (regionalNSUIDs.europe || regionalNSUIDs.asia)) {
-    console.log(`[NINTENDO-LIB] Phase 2: Testing regional NSUIDs for ${failedRegions.length} failed regions...`);
+  if (failedShops.length > 0 && (regionalNSUIDs.europe || regionalNSUIDs.asia || regionalNSUIDs.brazil)) {
+    console.log(`[NINTENDO-LIB] Phase 2: Testing regional NSUIDs for ${failedShops.length} failed shops...`);
     
-    const regionGroups = [
+    // Group shops by their likely regional NSUID
+    const shopGroups = [
       {
         nsuid: regionalNSUIDs.brazil,
-        regions: failedRegions.filter(code => ['BR'].includes(code))
+        shops: failedShops.filter(shop => shop.region === 1 && ['BR'].includes(shop.code)) // Americas region, Brazil
       },
       {
         nsuid: regionalNSUIDs.europe,
-        regions: failedRegions.filter(code => ['GB', 'DE', 'FR', 'ES', 'IT', 'NL', 'BE', 'AT', 'CH', 'NO', 'SE', 'DK'].includes(code))
+        shops: failedShops.filter(shop => shop.region === 2) // Europe region
       },
       {
         nsuid: regionalNSUIDs.asia,
-        regions: failedRegions.filter(code => ['JP', 'AU', 'NZ', 'HK', 'KR', 'TW', 'SG', 'MY', 'TH'].includes(code))
+        shops: failedShops.filter(shop => shop.region === 3) // Asia region
       }
     ];
     
-    for (const group of regionGroups) {
-      if (!group.nsuid || group.regions.length === 0) continue;
+    for (const group of shopGroups) {
+      if (!group.nsuid || group.shops.length === 0) continue;
       
-      console.log(`[NINTENDO-LIB] Testing NSUID ${group.nsuid} in ${group.regions.length} regions...`);
+      console.log(`[NINTENDO-LIB] Testing NSUID ${group.nsuid} in ${group.shops.length} shops...`);
       
-      const groupPromises = group.regions.map(regionCode => 
-        fetchPriceForRegionWithNSUID(group.nsuid, regionCode, game.title)
+      const groupPromises = group.shops.map(shop => 
+        fetchPriceForShop(group.nsuid, shop, game.title)
       );
       
       const groupResults = await Promise.allSettled(groupPromises);
@@ -656,57 +732,66 @@ async function getPricesForGame(game) {
         }
       });
       
-      // Rate limiting between region groups
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Rate limiting between groups
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
   }
   
-  console.log(`[NINTENDO-LIB] Total real prices found: ${prices.length}`);
-  console.log(`[NINTENDO-LIB] NSUIDs used - Americas: ${regionalNSUIDs.americas || game.nsuid}, Europe: ${regionalNSUIDs.europe || 'N/A'}, Asia: ${regionalNSUIDs.asia || 'N/A'}`);
+  console.log(`[NINTENDO-LIB] Total real prices found: ${prices.length} across ${activeShops.length} possible shops`);
+  console.log(`[NINTENDO-LIB] NSUIDs used - Americas: ${regionalNSUIDs.americas || game.nsuid}, Europe: ${regionalNSUIDs.europe || 'N/A'}, Asia: ${regionalNSUIDs.asia || 'N/A'}, Brazil: ${regionalNSUIDs.brazil || 'N/A'}`);
   
   return prices
     .filter(p => p.sgdPrice > 0)
     .sort((a, b) => a.sgdPrice - b.sgdPrice);
 }
 
+async function fetchPriceForShop(nsuid, shop, gameTitle) {
+  if (!nsuid || !shop) return null;
+  
+  try {
+    await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
+    
+    const priceData = await fetchPriceWithLibrary(nsuid, shop.code);
+    
+    if (priceData && priceData.price > 0) {
+      const sgdPrice = await convertToSGD(priceData.price, shop.currency);
+      
+      if (sgdPrice > 0) {
+        console.log(`[NINTENDO-LIB] ✅ Got price for ${shop.code} using NSUID ${nsuid}: ${priceData.price} ${shop.currency} = S$${sgdPrice.toFixed(2)}`);
+        
+        return {
+          region: shop.country,
+          regionCode: shop.code,
+          originalPrice: priceData.price,
+          currency: shop.currency,
+          sgdPrice: sgdPrice,
+          title: gameTitle,
+          discount: priceData.discount || 0,
+          difficult: shop.difficult,
+          giftCards: shop.giftCards
+        };
+      }
+    }
+  } catch (error) {
+    // Silently fail for individual shops
+  }
+  
+  return null;
+}
+
+// Legacy compatibility functions
 async function fetchPriceForRegion(game, region, regionCode) {
   return fetchPriceForRegionWithNSUID(game.nsuid, regionCode, game.title);
 }
 
 async function fetchPriceForRegionWithNSUID(nsuid, regionCode, gameTitle) {
-  if (!nsuid || !REGIONS[regionCode]) return null;
+  // Get shop info from active shops
+  const activeShops = await getActiveShopsWithCache();
+  const shop = activeShops.find(s => s.code === regionCode);
   
-  const region = REGIONS[regionCode];
+  if (!shop) return null;
   
-  try {
-    await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
-    
-    const priceData = await fetchPriceWithLibrary(nsuid, regionCode);
-    
-    if (priceData && priceData.price > 0) {
-      const sgdPrice = await convertToSGD(priceData.price, region.currency);
-      
-      if (sgdPrice > 0) {
-        console.log(`[NINTENDO-LIB] ✅ Got price for ${regionCode} using NSUID ${nsuid}: ${priceData.price} ${region.currency} = S$${sgdPrice.toFixed(2)}`);
-        
-        return {
-          region: region.name,
-          regionCode: regionCode,
-          originalPrice: priceData.price,
-          currency: region.currency,
-          sgdPrice: sgdPrice,
-          title: gameTitle,
-          discount: priceData.discount || 0,
-          difficult: region.difficult,
-          giftCards: region.giftCards
-        };
-      }
-    }
-  } catch (error) {
-    // Silently fail for individual regions
-  }
-  
-  return null;
+  return fetchPriceForShop(nsuid, shop, gameTitle);
 }
 
 async function fetchPriceWithLibrary(nsuid, regionCode) {
@@ -758,4 +843,4 @@ async function fetchPriceWithLibrary(nsuid, regionCode) {
   }
 }
 
-module.exports = { searchGames, searchGameByNSUID, REGIONS };
+module.exports = { searchGames, searchGameByNSUID, getActiveShopsWithCache };
