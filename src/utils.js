@@ -7,7 +7,8 @@ function formatPricesMessage(gameName, prices) {
   message += `📊 Top ${Math.min(prices.length, 25)} cheapest regions:\n\n`;
 
   const bestPrice = prices[0];
-  message += `🏆 *Best Deal: ${bestPrice.region}*\n`;
+  const bestRegionIcons = getRegionIcons(bestPrice);
+  message += `🏆 *Best Deal: ${bestPrice.region}*${bestRegionIcons}\n`;
   message += `💰 S$${bestPrice.sgdPrice.toFixed(2)} (${bestPrice.originalPrice.toFixed(2)} ${bestPrice.currency})\n`;
   
   if (bestPrice.discount > 0) {
@@ -20,16 +21,35 @@ function formatPricesMessage(gameName, prices) {
   prices.forEach((price, index) => {
     const position = index + 1;
     const flag = getRegionFlag(price.regionCode);
+    const regionIcons = getRegionIcons(price);
     const discountText = price.discount > 0 ? ` (-${price.discount}%)` : '';
     
-    message += `${position}. ${flag} ${price.region}\n`;
+    message += `${position}. ${flag} ${price.region}${regionIcons}\n`;
     message += `   S$${price.sgdPrice.toFixed(2)} (${price.originalPrice.toFixed(2)} ${price.currency})${discountText}\n`;
   });
 
   message += `\n💡 *Tip:* Prices are converted to SGD and sorted by cheapest first.`;
+  message += `\n🔸 = Difficult to purchase from outside region`;
+  message += `\n🎁 = Gift cards available (often discounted)`;
   message += `\n🕐 Data updated: ${new Date().toLocaleString('en-SG')}`;
 
   return message;
+}
+
+function getRegionIcons(price) {
+  let icons = '';
+  
+  // Add difficulty icon if region is difficult to purchase from
+  if (price.difficult) {
+    icons += ' 🔸';
+  }
+  
+  // Add gift card icon if gift cards are available
+  if (price.giftCards) {
+    icons += ' 🎁';
+  }
+  
+  return icons;
 }
 
 function getRegionFlag(regionCode) {
@@ -101,6 +121,7 @@ function validateGameName(gameName) {
 module.exports = {
   formatPricesMessage,
   getRegionFlag,
+  getRegionIcons,
   formatCurrency,
   sanitizeGameName,
   validateGameName
