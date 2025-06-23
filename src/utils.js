@@ -31,6 +31,7 @@ function formatPricesMessage(gameName, prices) {
   message += `\n💡 *Tip:* Prices are converted to SGD and sorted by cheapest first.`;
   message += `\n🔸 = Difficult to purchase from outside region`;
   message += `\n🎁 = Gift cards available (often discounted)`;
+  message += `\n⚠️ *Note:* Some regions like Hong Kong, Singapore, South Korea are not available through Nintendo's public API`;
   message += `\n🕐 Data updated: ${new Date().toLocaleString('en-SG')}`;
 
   return message;
