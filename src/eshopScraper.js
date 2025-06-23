@@ -1,8 +1,11 @@
 const { 
   getQueriedGamesAmerica,
+  getQueriedGamesBrazil,
   getGamesEurope,
   getGamesJapan,
-  getPrices
+  getPrices,
+  parseNSUID,
+  Region
 } = require('nintendo-switch-eshop');
 const { convertToSGD } = require('./currencyConverter');
 
@@ -280,7 +283,7 @@ async function findRegionalNSUIDs(gameTitle, originalNSUID) {
     americas: originalNSUID // Start with the original NSUID as Americas fallback
   };
   
-  // For Mario Kart 8 Deluxe, use known regional NSUIDs
+  // For Mario Kart 8 Deluxe, use known regional NSUIDs (these are verified to work)
   if (gameTitle.toLowerCase().includes('mario kart') && gameTitle.toLowerCase().includes('8') && gameTitle.toLowerCase().includes('deluxe')) {
     console.log(`[NINTENDO-LIB] Using known Mario Kart 8 Deluxe NSUIDs`);
     regionalNSUIDs.americas = '70010000000153'; // Known Americas NSUID
@@ -292,56 +295,118 @@ async function findRegionalNSUIDs(gameTitle, originalNSUID) {
   }
   
   try {
-    // Search in Americas for exact match
-    const americanGames = await getQueriedGamesAmerica(gameTitle, { hitsPerPage: 30 });
-    const exactAmericanMatch = americanGames.find(game => 
-      game.title && game.title.toLowerCase() === gameTitle.toLowerCase()
-    );
-    const goodAmericanMatch = exactAmericanMatch || americanGames.find(game => 
-      game.title && calculateMatchScore(gameTitle, game.title) > 1500
-    );
+    // Search Americas using the proper queried search function
+    console.log(`[NINTENDO-LIB] Searching Americas using getQueriedGamesAmerica...`);
+    const americanGames = await getQueriedGamesAmerica(gameTitle, { hitsPerPage: 50 });
+    const bestAmericanMatch = findBestMatch(gameTitle, americanGames);
     
-    if (goodAmericanMatch) {
-      regionalNSUIDs.americas = goodAmericanMatch.nsuid;
-      console.log(`[NINTENDO-LIB] Americas NSUID: ${goodAmericanMatch.nsuid} for "${goodAmericanMatch.title}"`);
+    if (bestAmericanMatch) {
+      // Use parseNSUID to properly extract the NSUID
+      const extractedNSUID = parseNSUID(bestAmericanMatch, Region.AMERICAS);
+      if (extractedNSUID) {
+        regionalNSUIDs.americas = extractedNSUID;
+        console.log(`[NINTENDO-LIB] Americas NSUID: ${extractedNSUID} for "${bestAmericanMatch.title}"`);
+      }
     }
     
-    // Search in Europe
-    const europeanGames = await getGamesEurope({ limit: 500 });
-    const exactEuropeanMatch = europeanGames.find(game => 
-      game.title && game.title.toLowerCase() === gameTitle.toLowerCase()
-    );
-    const goodEuropeanMatch = exactEuropeanMatch || europeanGames.find(game => 
-      game.title && calculateMatchScore(gameTitle, game.title) > 1500
-    );
-    
-    if (goodEuropeanMatch) {
-      regionalNSUIDs.europe = goodEuropeanMatch.nsuid_txt?.[0];
-      console.log(`[NINTENDO-LIB] Europe NSUID: ${goodEuropeanMatch.nsuid_txt?.[0]} for "${goodEuropeanMatch.title}"`);
+    // Search Brazil for potentially different NSUID
+    console.log(`[NINTENDO-LIB] Searching Brazil using getQueriedGamesBrazil...`);
+    try {
+      const brazilGames = await getQueriedGamesBrazil(gameTitle, { hitsPerPage: 30 });
+      const bestBrazilMatch = findBestMatch(gameTitle, brazilGames);
+      
+      if (bestBrazilMatch) {
+        const brazilNSUID = parseNSUID(bestBrazilMatch, Region.AMERICAS); // Brazil uses Americas region
+        if (brazilNSUID && brazilNSUID !== regionalNSUIDs.americas) {
+          regionalNSUIDs.brazil = brazilNSUID;
+          console.log(`[NINTENDO-LIB] Brazil specific NSUID: ${brazilNSUID} for "${bestBrazilMatch.title}"`);
+        }
+      }
+    } catch (brazilError) {
+      console.log(`[NINTENDO-LIB] Error searching Brazilian games: ${brazilError.message}`);
     }
     
-    // Search in Japan
-    const japaneseGames = await getGamesJapan();
-    const exactJapaneseMatch = japaneseGames.find(game => 
-      game.title && game.title.toLowerCase() === gameTitle.toLowerCase()
-    );
-    const goodJapaneseMatch = exactJapaneseMatch || japaneseGames.find(game => 
-      game.title && (
-        calculateMatchScore(gameTitle, game.title) > 1500 ||
-        (gameTitle.toLowerCase().includes('mario kart') && game.title.includes('マリオカート'))
-      )
-    );
+    // Search Europe using the complete games list
+    console.log(`[NINTENDO-LIB] Searching Europe using getGamesEurope...`);
+    try {
+      const europeanGames = await getGamesEurope({ limit: 1500, locale: 'en' });
+      console.log(`[NINTENDO-LIB] Searching through ${europeanGames.length} European games...`);
+      
+      const bestEuropeanMatch = findBestMatch(gameTitle, europeanGames);
+      
+      if (bestEuropeanMatch) {
+        const europeNSUID = parseNSUID(bestEuropeanMatch, Region.EUROPE);
+        if (europeNSUID) {
+          regionalNSUIDs.europe = europeNSUID;
+          console.log(`[NINTENDO-LIB] Europe NSUID: ${europeNSUID} for "${bestEuropeanMatch.title}"`);
+        }
+      } else {
+        console.log(`[NINTENDO-LIB] No European match found for "${gameTitle}"`);
+      }
+    } catch (euroError) {
+      console.log(`[NINTENDO-LIB] Error searching European games: ${euroError.message}`);
+    }
     
-    if (goodJapaneseMatch) {
-      regionalNSUIDs.asia = goodJapaneseMatch.nsuid;
-      console.log(`[NINTENDO-LIB] Asia NSUID: ${goodJapaneseMatch.nsuid} for "${goodJapaneseMatch.title}"`);
+    // Search Japan/Asia using the complete games list
+    console.log(`[NINTENDO-LIB] Searching Japan/Asia using getGamesJapan...`);
+    try {
+      const japaneseGames = await getGamesJapan();
+      console.log(`[NINTENDO-LIB] Searching through ${japaneseGames.length} Japanese games...`);
+      
+      // For Japanese games, try both English and Japanese title matching
+      let bestJapaneseMatch = findBestMatch(gameTitle, japaneseGames);
+      
+      // Special handling for games that might have Japanese titles
+      if (!bestJapaneseMatch && gameTitle.toLowerCase().includes('mario kart')) {
+        bestJapaneseMatch = japaneseGames.find(game => 
+          game.title && game.title.includes('マリオカート')
+        );
+      }
+      
+      if (bestJapaneseMatch) {
+        const asianNSUID = parseNSUID(bestJapaneseMatch, Region.ASIA);
+        if (asianNSUID) {
+          regionalNSUIDs.asia = asianNSUID;
+          console.log(`[NINTENDO-LIB] Asia NSUID: ${asianNSUID} for "${bestJapaneseMatch.title}"`);
+        }
+      } else {
+        console.log(`[NINTENDO-LIB] No Asian match found for "${gameTitle}"`);
+      }
+    } catch (asiaError) {
+      console.log(`[NINTENDO-LIB] Error searching Japanese games: ${asiaError.message}`);
     }
     
   } catch (error) {
     console.log(`[NINTENDO-LIB] Error finding regional NSUIDs: ${error.message}`);
   }
   
+  console.log(`[NINTENDO-LIB] Regional NSUID discovery complete. Found: Americas=${regionalNSUIDs.americas}, Brazil=${regionalNSUIDs.brazil || 'N/A'}, Europe=${regionalNSUIDs.europe || 'N/A'}, Asia=${regionalNSUIDs.asia || 'N/A'}`);
   return regionalNSUIDs;
+}
+
+// Helper function to find the best matching game from a list
+function findBestMatch(searchTitle, games) {
+  if (!games || games.length === 0) return null;
+  
+  const normalizedSearch = searchTitle.toLowerCase().trim();
+  
+  // Try exact match first
+  let exactMatch = games.find(game => 
+    game.title && game.title.toLowerCase() === normalizedSearch
+  );
+  if (exactMatch) return exactMatch;
+  
+  // Score all games and find the best match
+  const scoredGames = games
+    .filter(game => game.title && game.title.trim().length > 0)
+    .map(game => ({
+      game,
+      score: calculateMatchScore(normalizedSearch, game.title.toLowerCase())
+    }))
+    .filter(item => item.score > 800) // Higher threshold for better matches
+    .sort((a, b) => b.score - a.score);
+  
+  return scoredGames.length > 0 ? scoredGames[0].game : null;
 }
 
 async function getPricesForGame(game) {
@@ -352,57 +417,77 @@ async function getPricesForGame(game) {
   // Find regional NSUIDs for comprehensive pricing
   const regionalNSUIDs = await findRegionalNSUIDs(game.title, game.nsuid);
   
-  // Define region groups and their corresponding NSUIDs
-  const regionGroups = [
-    {
-      nsuid: regionalNSUIDs.americas || game.nsuid,
-      regions: ['US', 'CA', 'MX', 'BR', 'AR', 'CL']
-    },
-    {
-      nsuid: regionalNSUIDs.europe,
-      regions: ['GB', 'DE', 'FR', 'ES', 'IT', 'NL', 'BE', 'AT', 'CH', 'NO', 'SE', 'DK']
-    },
-    {
-      nsuid: regionalNSUIDs.asia,
-      regions: ['JP', 'AU', 'NZ', 'HK', 'KR', 'TW', 'SG', 'MY', 'TH']
+  // Strategy: Try original NSUID in ALL regions first, then use regional NSUIDs for regions that failed
+  const allRegionCodes = Object.keys(REGIONS);
+  
+  console.log(`[NINTENDO-LIB] Phase 1: Testing original NSUID ${regionalNSUIDs.americas || game.nsuid} in all ${allRegionCodes.length} regions...`);
+  
+  // Phase 1: Try original NSUID everywhere
+  const phase1Promises = allRegionCodes.map(regionCode => 
+    fetchPriceForRegionWithNSUID(regionalNSUIDs.americas || game.nsuid, regionCode, game.title)
+  );
+  
+  const phase1Results = await Promise.allSettled(phase1Promises);
+  const phase1SuccessRegions = [];
+  
+  phase1Results.forEach((result, index) => {
+    if (result.status === 'fulfilled' && result.value) {
+      prices.push(result.value);
+      phase1SuccessRegions.push(allRegionCodes[index]);
     }
-  ];
+  });
   
-  // Add remaining regions to americas group as fallback
-  const allDefinedRegions = regionGroups.flatMap(group => group.regions);
-  const remainingRegions = Object.keys(REGIONS).filter(code => !allDefinedRegions.includes(code));
-  regionGroups[0].regions.push(...remainingRegions);
+  console.log(`[NINTENDO-LIB] Phase 1 completed: Found prices in ${phase1SuccessRegions.length} regions using original NSUID`);
   
-  console.log(`[NINTENDO-LIB] Using NSUIDs - Americas: ${regionalNSUIDs.americas || game.nsuid}, Europe: ${regionalNSUIDs.europe || 'N/A'}, Asia: ${regionalNSUIDs.asia || 'N/A'}`);
+  // Phase 2: Try regional NSUIDs for regions that failed in Phase 1
+  const failedRegions = allRegionCodes.filter(code => !phase1SuccessRegions.includes(code));
   
-  // Fetch prices for each region group
-  for (const group of regionGroups) {
-    if (!group.nsuid) continue;
+  if (failedRegions.length > 0 && (regionalNSUIDs.europe || regionalNSUIDs.asia)) {
+    console.log(`[NINTENDO-LIB] Phase 2: Testing regional NSUIDs for ${failedRegions.length} failed regions...`);
     
-    console.log(`[NINTENDO-LIB] Fetching prices for NSUID ${group.nsuid} in ${group.regions.length} regions...`);
-    
-    const groupPromises = group.regions.map(regionCode => 
-      fetchPriceForRegionWithNSUID(group.nsuid, regionCode, game.title)
-    );
-    
-    const groupResults = await Promise.allSettled(groupPromises);
-    
-    groupResults.forEach((result, index) => {
-      if (result.status === 'fulfilled' && result.value) {
-        prices.push(result.value);
+    const regionGroups = [
+      {
+        nsuid: regionalNSUIDs.brazil,
+        regions: failedRegions.filter(code => ['BR'].includes(code))
+      },
+      {
+        nsuid: regionalNSUIDs.europe,
+        regions: failedRegions.filter(code => ['GB', 'DE', 'FR', 'ES', 'IT', 'NL', 'BE', 'AT', 'CH', 'NO', 'SE', 'DK'].includes(code))
+      },
+      {
+        nsuid: regionalNSUIDs.asia,
+        regions: failedRegions.filter(code => ['JP', 'AU', 'NZ', 'HK', 'KR', 'TW', 'SG', 'MY', 'TH'].includes(code))
       }
-    });
+    ];
     
-    // Rate limiting between region groups
-    await new Promise(resolve => setTimeout(resolve, 500));
+    for (const group of regionGroups) {
+      if (!group.nsuid || group.regions.length === 0) continue;
+      
+      console.log(`[NINTENDO-LIB] Testing NSUID ${group.nsuid} in ${group.regions.length} regions...`);
+      
+      const groupPromises = group.regions.map(regionCode => 
+        fetchPriceForRegionWithNSUID(group.nsuid, regionCode, game.title)
+      );
+      
+      const groupResults = await Promise.allSettled(groupPromises);
+      
+      groupResults.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value) {
+          prices.push(result.value);
+        }
+      });
+      
+      // Rate limiting between region groups
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
   }
   
   console.log(`[NINTENDO-LIB] Total real prices found: ${prices.length}`);
+  console.log(`[NINTENDO-LIB] NSUIDs used - Americas: ${regionalNSUIDs.americas || game.nsuid}, Europe: ${regionalNSUIDs.europe || 'N/A'}, Asia: ${regionalNSUIDs.asia || 'N/A'}`);
   
   return prices
     .filter(p => p.sgdPrice > 0)
-    .sort((a, b) => a.sgdPrice - b.sgdPrice)
-    .slice(0, 25);
+    .sort((a, b) => a.sgdPrice - b.sgdPrice);
 }
 
 async function fetchPriceForRegion(game, region, regionCode) {
