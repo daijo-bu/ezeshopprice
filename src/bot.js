@@ -4,7 +4,61 @@ const { formatPricesMessage, validateGameName, sanitizeGameName } = require('./u
 require('dotenv').config();
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const bot = new TelegramBot(token, { polling: true });
+
+if (!token) {
+  console.error('❌ TELEGRAM_BOT_TOKEN is not set in environment variables');
+  console.error('📝 Please check your Railway environment variables');
+  process.exit(1);
+}
+
+console.log('🔑 Bot token found, length:', token.length);
+console.log('🔑 Token starts with:', token.substring(0, 10) + '...');
+
+const bot = new TelegramBot(token, { 
+  polling: {
+    interval: 1000,
+    autoStart: true,
+    params: {
+      timeout: 10
+    }
+  }
+});
+
+console.log('🤖 TelegramBot instance created');
+
+// Check and clear any existing webhooks
+bot.getWebHookInfo().then(info => {
+  console.log('🌐 Webhook info:', info);
+  if (info.url) {
+    console.log('⚠️  Webhook is set, removing it to enable polling...');
+    return bot.deleteWebHook();
+  }
+}).then(() => {
+  console.log('✅ Webhook cleared, polling should work now');
+}).catch(error => {
+  console.error('❌ Error checking/clearing webhook:', error.message);
+});
+
+bot.on('polling_error', (error) => {
+  console.error('❌ Polling error:', error.code, error.message);
+  if (error.response) {
+    console.error('Response status:', error.response.statusCode);
+    console.error('Response body:', error.response.body);
+  }
+});
+
+bot.on('error', (error) => {
+  console.error('❌ Bot error:', error);
+});
+
+bot.on('message', (msg) => {
+  console.log('📨 Received message:', {
+    from: msg.from?.username || msg.from?.first_name,
+    chat_id: msg.chat.id,
+    text: msg.text,
+    date: new Date(msg.date * 1000).toISOString()
+  });
+});
 
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
