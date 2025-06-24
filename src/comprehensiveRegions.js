@@ -2,19 +2,20 @@
 const axios = require('axios');
 const { convertToSGD } = require('./currencyConverter');
 
-// Complete region mapping from nintendo-switch-eshop documentation + direct APIs
+// Official Nintendo eShop regions (verified via nintendo-switch-eshop library v8.0.1)
+// Total: 43 officially supported regions (8 Americas + 34 Europe/Oceania + 1 Asia)
 const ALL_NINTENDO_REGIONS = {
-  // Americas
+  // Americas (8 regions)
   'US': { code: 'US', currency: 'USD', name: 'United States', difficult: false, giftCards: true, api: 'sales' },
   'CA': { code: 'CA', currency: 'CAD', name: 'Canada', difficult: false, giftCards: true, api: 'sales' },
   'MX': { code: 'MX', currency: 'MXN', name: 'Mexico', difficult: true, giftCards: true, api: 'sales' },
-  'CO': { code: 'CO', currency: 'COP', name: 'Colombia', difficult: true, giftCards: false, api: 'sales' },
+  'BR': { code: 'BR', currency: 'BRL', name: 'Brazil', difficult: true, giftCards: true, api: 'library' },
   'AR': { code: 'AR', currency: 'ARS', name: 'Argentina', difficult: true, giftCards: true, api: 'sales' },
   'CL': { code: 'CL', currency: 'CLP', name: 'Chile', difficult: true, giftCards: false, api: 'sales' },
+  'CO': { code: 'CO', currency: 'COP', name: 'Colombia', difficult: true, giftCards: false, api: 'sales' },
   'PE': { code: 'PE', currency: 'PEN', name: 'Peru', difficult: true, giftCards: false, api: 'sales' },
-  'BR': { code: 'BR', currency: 'BRL', name: 'Brazil', difficult: true, giftCards: true, api: 'library' },
   
-  // Europe  
+  // Europe & Oceania (34 regions)
   'GB': { code: 'GB', currency: 'GBP', name: 'United Kingdom', difficult: false, giftCards: true, api: 'sales' },
   'DE': { code: 'DE', currency: 'EUR', name: 'Germany', difficult: false, giftCards: true, api: 'sales' },
   'FR': { code: 'FR', currency: 'EUR', name: 'France', difficult: false, giftCards: true, api: 'sales' },
@@ -23,9 +24,10 @@ const ALL_NINTENDO_REGIONS = {
   'NL': { code: 'NL', currency: 'EUR', name: 'Netherlands', difficult: false, giftCards: true, api: 'sales' },
   'BE': { code: 'BE', currency: 'EUR', name: 'Belgium', difficult: false, giftCards: false, api: 'sales' },
   'CH': { code: 'CH', currency: 'CHF', name: 'Switzerland', difficult: true, giftCards: false, api: 'sales' },
-  'RU': { code: 'RU', currency: 'RUB', name: 'Russia', difficult: true, giftCards: true, api: 'sales' },
-  
-  // Northern Europe (from documentation)
+  'AT': { code: 'AT', currency: 'EUR', name: 'Austria', difficult: false, giftCards: false, api: 'sales' },
+  'PT': { code: 'PT', currency: 'EUR', name: 'Portugal', difficult: false, giftCards: false, api: 'sales' },
+  'IE': { code: 'IE', currency: 'EUR', name: 'Ireland', difficult: false, giftCards: false, api: 'sales' },
+  'LU': { code: 'LU', currency: 'EUR', name: 'Luxembourg', difficult: false, giftCards: false, api: 'sales' },
   'CZ': { code: 'CZ', currency: 'CZK', name: 'Czech Republic', difficult: true, giftCards: false, api: 'sales' },
   'DK': { code: 'DK', currency: 'DKK', name: 'Denmark', difficult: false, giftCards: false, api: 'sales' },
   'FI': { code: 'FI', currency: 'EUR', name: 'Finland', difficult: false, giftCards: false, api: 'sales' },
@@ -34,20 +36,27 @@ const ALL_NINTENDO_REGIONS = {
   'NO': { code: 'NO', currency: 'NOK', name: 'Norway', difficult: true, giftCards: false, api: 'sales' },
   'PL': { code: 'PL', currency: 'PLN', name: 'Poland', difficult: true, giftCards: false, api: 'sales' },
   'SE': { code: 'SE', currency: 'SEK', name: 'Sweden', difficult: false, giftCards: false, api: 'sales' },
-  
-  // Other regions from documentation
+  'SK': { code: 'SK', currency: 'EUR', name: 'Slovakia', difficult: true, giftCards: false, api: 'sales' },
+  'SI': { code: 'SI', currency: 'EUR', name: 'Slovenia', difficult: true, giftCards: false, api: 'sales' },
+  'HR': { code: 'HR', currency: 'EUR', name: 'Croatia', difficult: true, giftCards: false, api: 'sales' },
+  'BG': { code: 'BG', currency: 'EUR', name: 'Bulgaria', difficult: true, giftCards: false, api: 'sales' },
+  'RO': { code: 'RO', currency: 'EUR', name: 'Romania', difficult: true, giftCards: false, api: 'sales' },
+  'EE': { code: 'EE', currency: 'EUR', name: 'Estonia', difficult: true, giftCards: false, api: 'sales' },
+  'LV': { code: 'LV', currency: 'EUR', name: 'Latvia', difficult: true, giftCards: false, api: 'sales' },
+  'LT': { code: 'LT', currency: 'EUR', name: 'Lithuania', difficult: true, giftCards: false, api: 'sales' },
+  'CY': { code: 'CY', currency: 'EUR', name: 'Cyprus', difficult: true, giftCards: false, api: 'sales' },
+  'MT': { code: 'MT', currency: 'EUR', name: 'Malta', difficult: true, giftCards: false, api: 'sales' },
+  'RU': { code: 'RU', currency: 'RUB', name: 'Russia', difficult: true, giftCards: true, api: 'sales' },
   'AU': { code: 'AU', currency: 'AUD', name: 'Australia', difficult: false, giftCards: true, api: 'sales' },
   'NZ': { code: 'NZ', currency: 'NZD', name: 'New Zealand', difficult: false, giftCards: false, api: 'sales' },
   'ZA': { code: 'ZA', currency: 'ZAR', name: 'South Africa', difficult: true, giftCards: true, api: 'sales' },
   
-  // Asia (via direct price API)
-  'JP': { code: 'JP', currency: 'JPY', name: 'Japan', difficult: true, giftCards: true, api: 'library' },
-  'HK': { code: 'HK', currency: 'HKD', name: 'Hong Kong', difficult: true, giftCards: true, api: 'direct' },
-  'KR': { code: 'KR', currency: 'KRW', name: 'South Korea', difficult: true, giftCards: false, api: 'direct' },
-  'SG': { code: 'SG', currency: 'SGD', name: 'Singapore', difficult: false, giftCards: false, api: 'direct' },
-  'TW': { code: 'TW', currency: 'TWD', name: 'Taiwan', difficult: true, giftCards: false, api: 'direct' },
-  'TH': { code: 'TH', currency: 'THB', name: 'Thailand', difficult: true, giftCards: false, api: 'direct' },
-  'MY': { code: 'MY', currency: 'MYR', name: 'Malaysia', difficult: true, giftCards: false, api: 'direct' }
+  // Asia (1 region only - Japan is the only official Asian eShop)
+  'JP': { code: 'JP', currency: 'JPY', name: 'Japan', difficult: true, giftCards: true, api: 'library' }
+  
+  // NOTE: Hong Kong, Singapore, South Korea, Taiwan, Thailand, Malaysia 
+  // DO NOT have official Nintendo eShops as of 2024
+  // They will get official support with Nintendo Switch 2 in 2025
 };
 
 // Language mappings for sales API endpoints

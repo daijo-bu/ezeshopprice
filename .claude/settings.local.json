@@ -21,7 +21,9 @@
       "Bash(ls:*)",
       "Bash(curl:*)",
       "Bash(rm:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "mcp__ide__executeCode",
+      "WebFetch(domain:www.nintendo.com.hk)"
     ],
     "deny": []
   }

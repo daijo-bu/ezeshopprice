@@ -31,7 +31,7 @@ function formatPricesMessage(gameName, prices) {
   message += `\n💡 *Tip:* Prices are converted to SGD and sorted by cheapest first.`;
   message += `\n🔸 = Difficult to purchase from outside region`;
   message += `\n🎁 = Gift cards available (often discounted)`;
-  message += `\n🌍 *Coverage:* ${prices.length} regions found prices out of 34 total regions checked`;
+  message += `\n🌍 *Coverage:* ${prices.length} regions found prices out of 43 total regions checked`;
   message += `\n🕐 Data updated: ${new Date().toLocaleString('en-SG')}`;
 
   return message;
@@ -58,17 +58,15 @@ function getRegionFlag(regionCode) {
     // Americas
     'US': '🇺🇸', 'CA': '🇨🇦', 'MX': '🇲🇽', 'BR': '🇧🇷', 'AR': '🇦🇷', 'CL': '🇨🇱', 'PE': '🇵🇪', 'CO': '🇨🇴',
     
-    // Europe  
-    'GB': '🇬🇧', 'DE': '🇩🇪', 'FR': '🇫🇷', 'ES': '🇪🇸', 'IT': '🇮🇹', 'NL': '🇳🇱', 'BE': '🇧🇪', 'CH': '🇨🇭', 'RU': '🇷🇺',
-    
-    // Northern Europe
-    'CZ': '🇨🇿', 'DK': '🇩🇰', 'FI': '🇫🇮', 'GR': '🇬🇷', 'HU': '🇭🇺', 'NO': '🇳🇴', 'PL': '🇵🇱', 'SE': '🇸🇪',
+    // Europe & Oceania
+    'GB': '🇬🇧', 'DE': '🇩🇪', 'FR': '🇫🇷', 'ES': '🇪🇸', 'IT': '🇮🇹', 'NL': '🇳🇱', 'BE': '🇧🇪', 'CH': '🇨🇭', 'AT': '🇦🇹', 'PT': '🇵🇹', 'IE': '🇮🇪', 'LU': '🇱🇺',
+    'CZ': '🇨🇿', 'DK': '🇩🇰', 'FI': '🇫🇮', 'GR': '🇬🇷', 'HU': '🇭🇺', 'NO': '🇳🇴', 'PL': '🇵🇱', 'SE': '🇸🇪', 'SK': '🇸🇰', 'SI': '🇸🇮', 'HR': '🇭🇷', 'BG': '🇧🇬', 'RO': '🇷🇴', 'EE': '🇪🇪', 'LV': '🇱🇻', 'LT': '🇱🇹', 'CY': '🇨🇾', 'MT': '🇲🇹', 'RU': '🇷🇺',
     
     // Other regions
     'AU': '🇦🇺', 'NZ': '🇳🇿', 'ZA': '🇿🇦',
     
-    // Asia (including new direct API regions)
-    'JP': '🇯🇵', 'HK': '🇭🇰', 'KR': '🇰🇷', 'SG': '🇸🇬', 'TW': '🇹🇼', 'TH': '🇹🇭', 'MY': '🇲🇾'
+    // Asia (Japan only - no other Asian regions have official eShops)
+    'JP': '🇯🇵'
   };
   
   return flags[regionCode] || '🌍';
