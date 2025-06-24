@@ -31,7 +31,7 @@ function formatPricesMessage(gameName, prices) {
   message += `\n💡 *Tip:* Prices are converted to SGD and sorted by cheapest first.`;
   message += `\n🔸 = Difficult to purchase from outside region`;
   message += `\n🎁 = Gift cards available (often discounted)`;
-  message += `\n🌍 *Coverage:* ${prices.length} regions found prices out of 43 total regions checked`;
+  message += `\n🌍 *Coverage:* ${prices.length} regions found prices out of 44 total regions checked`;
   message += `\n🕐 Data updated: ${new Date().toLocaleString('en-SG')}`;
 
   return message;
@@ -65,8 +65,8 @@ function getRegionFlag(regionCode) {
     // Other regions
     'AU': '🇦🇺', 'NZ': '🇳🇿', 'ZA': '🇿🇦',
     
-    // Asia (Japan only - no other Asian regions have official eShops)
-    'JP': '🇯🇵'
+    // Asia (Japan and Hong Kong have official eShops)
+    'JP': '🇯🇵', 'HK': '🇭🇰'
   };
   
   return flags[regionCode] || '🌍';

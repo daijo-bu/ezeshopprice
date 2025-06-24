@@ -168,7 +168,7 @@ Example: /price "The Legend of Zelda"
 🌍 I check prices across ${totalRegions} Nintendo eShop regions including:
 • 🇺🇸 Americas (US, CA, MX, BR, AR, CL, CO, PE)
 • 🇪🇺 Europe & Oceania (GB, DE, FR, IT, ES, NL, BE, CH, AT, PT, IE, LU, CZ, DK, FI, GR, HU, NO, PL, SE, SK, SI, HR, BG, RO, EE, LV, LT, CY, MT, RU, AU, NZ, ZA)
-• 🇯🇵 Asia (JP only - other Asian regions will get eShops in 2025)
+• 🇯🇵 Asia (JP, HK - other Asian regions will get eShops in 2025)
 
 💰 All prices converted to SGD and sorted by cheapest first!`;
   

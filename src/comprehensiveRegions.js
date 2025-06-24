@@ -51,12 +51,14 @@ const ALL_NINTENDO_REGIONS = {
   'NZ': { code: 'NZ', currency: 'NZD', name: 'New Zealand', difficult: false, giftCards: false, api: 'sales' },
   'ZA': { code: 'ZA', currency: 'ZAR', name: 'South Africa', difficult: true, giftCards: true, api: 'sales' },
   
-  // Asia (1 region only - Japan is the only official Asian eShop)
-  'JP': { code: 'JP', currency: 'JPY', name: 'Japan', difficult: true, giftCards: true, api: 'library' }
+  // Asia (2 regions - Japan and Hong Kong have official eShops)
+  'JP': { code: 'JP', currency: 'JPY', name: 'Japan', difficult: true, giftCards: true, api: 'library' },
+  'HK': { code: 'HK', currency: 'HKD', name: 'Hong Kong', difficult: true, giftCards: true, api: 'direct' }
   
-  // NOTE: Hong Kong, Singapore, South Korea, Taiwan, Thailand, Malaysia 
+  // NOTE: Singapore, South Korea, Taiwan, Thailand, Malaysia 
   // DO NOT have official Nintendo eShops as of 2024
   // They will get official support with Nintendo Switch 2 in 2025
+  // Hong Kong eShop launched April 3, 2018 and is operational but has API access limitations
 };
 
 // Language mappings for sales API endpoints
