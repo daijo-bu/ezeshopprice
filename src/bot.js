@@ -1,5 +1,5 @@
 const TelegramBot = require('node-telegram-bot-api');
-const { searchGames, searchGameByNSUID } = require('./eshopScraperCached');
+const { searchGamesFinal: searchGames, searchGameByNSUIDFinal: searchGameByNSUID, getAllRegionsCount } = require('./eshopScraperFinal');
 const { formatPricesMessage, validateGameName, sanitizeGameName } = require('./utils');
 require('dotenv').config();
 
@@ -159,12 +159,19 @@ bot.on('message', (msg) => {
 
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
+  const totalRegions = getAllRegionsCount();
   const welcomeMessage = `Welcome to Nintendo eShop Price Bot! 🎮
 
-Use /price <game name> to get price comparison across regions.
+Use /price <game name> to get price comparison across ALL regions.
 Example: /price "The Legend of Zelda"
 
-I'll show you the top 25 cheapest regions with prices converted to SGD.`;
+🌍 I check prices across ${totalRegions} Nintendo eShop regions including:
+• 🇺🇸 Americas (US, CA, MX, BR, AR, CL, CO, PE)
+• 🇪🇺 Europe (GB, DE, FR, IT, ES, NL, BE, CH, RU, CZ, DK, FI, GR, HU, NO, PL, SE)
+• 🇦🇺 Oceania (AU, NZ, ZA)  
+• 🇭🇰 Asia (JP, HK, KR, SG, TW, TH, MY)
+
+💰 All prices converted to SGD and sorted by cheapest first!`;
   
   bot.sendMessage(chatId, welcomeMessage);
 });
@@ -180,7 +187,8 @@ bot.onText(/\/price (.+)/, async (msg, match) => {
   
   const gameName = sanitizeGameName(rawGameName);
   
-  const searchingMessage = await bot.sendMessage(chatId, `🔍 Searching Nintendo eShop for "${gameName}"...\n⏳ Finding real prices only.`);
+  const totalRegions = getAllRegionsCount();
+  const searchingMessage = await bot.sendMessage(chatId, `🔍 Searching Nintendo eShop for "${gameName}"...\n⏳ Checking prices across ${totalRegions} regions worldwide.`);
   
   try {
     const result = await searchGames(gameName);

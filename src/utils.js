@@ -31,7 +31,7 @@ function formatPricesMessage(gameName, prices) {
   message += `\n💡 *Tip:* Prices are converted to SGD and sorted by cheapest first.`;
   message += `\n🔸 = Difficult to purchase from outside region`;
   message += `\n🎁 = Gift cards available (often discounted)`;
-  message += `\n⚠️ *Note:* Some regions like Hong Kong, Singapore, South Korea are not available through Nintendo's public API`;
+  message += `\n🌍 *Coverage:* ${prices.length} regions found prices out of 34 total regions checked`;
   message += `\n🕐 Data updated: ${new Date().toLocaleString('en-SG')}`;
 
   return message;
@@ -55,40 +55,20 @@ function getRegionIcons(price) {
 
 function getRegionFlag(regionCode) {
   const flags = {
-    'US': '🇺🇸',
-    'CA': '🇨🇦',
-    'MX': '🇲🇽',
-    'BR': '🇧🇷',
-    'AR': '🇦🇷',
-    'CL': '🇨🇱',
-    'PE': '🇵🇪',
-    'CO': '🇨🇴',
-    'GB': '🇬🇧',
-    'DE': '🇩🇪',
-    'FR': '🇫🇷',
-    'ES': '🇪🇸',
-    'IT': '🇮🇹',
-    'NL': '🇳🇱',
-    'BE': '🇧🇪',
-    'AT': '🇦🇹',
-    'CH': '🇨🇭',
-    'NO': '🇳🇴',
-    'SE': '🇸🇪',
-    'DK': '🇩🇰',
-    'PL': '🇵🇱',
-    'CZ': '🇨🇿',
-    'HU': '🇭🇺',
-    'JP': '🇯🇵',
-    'KR': '🇰🇷',
-    'HK': '🇭🇰',
-    'TW': '🇹🇼',
-    'SG': '🇸🇬',
-    'MY': '🇲🇾',
-    'TH': '🇹🇭',
-    'AU': '🇦🇺',
-    'NZ': '🇳🇿',
-    'RU': '🇷🇺',
-    'ZA': '🇿🇦'
+    // Americas
+    'US': '🇺🇸', 'CA': '🇨🇦', 'MX': '🇲🇽', 'BR': '🇧🇷', 'AR': '🇦🇷', 'CL': '🇨🇱', 'PE': '🇵🇪', 'CO': '🇨🇴',
+    
+    // Europe  
+    'GB': '🇬🇧', 'DE': '🇩🇪', 'FR': '🇫🇷', 'ES': '🇪🇸', 'IT': '🇮🇹', 'NL': '🇳🇱', 'BE': '🇧🇪', 'CH': '🇨🇭', 'RU': '🇷🇺',
+    
+    // Northern Europe
+    'CZ': '🇨🇿', 'DK': '🇩🇰', 'FI': '🇫🇮', 'GR': '🇬🇷', 'HU': '🇭🇺', 'NO': '🇳🇴', 'PL': '🇵🇱', 'SE': '🇸🇪',
+    
+    // Other regions
+    'AU': '🇦🇺', 'NZ': '🇳🇿', 'ZA': '🇿🇦',
+    
+    // Asia (including new direct API regions)
+    'JP': '🇯🇵', 'HK': '🇭🇰', 'KR': '🇰🇷', 'SG': '🇸🇬', 'TW': '🇹🇼', 'TH': '🇹🇭', 'MY': '🇲🇾'
   };
   
   return flags[regionCode] || '🌍';
