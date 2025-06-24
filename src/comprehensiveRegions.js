@@ -1,65 +1,104 @@
-// Comprehensive regional support combining library + direct APIs
+// Comprehensive regional support using dynamic getActiveShops() + additional regions
 const axios = require('axios');
 const { convertToSGD } = require('./currencyConverter');
+const { getActiveShops } = require('nintendo-switch-eshop');
 
-// Official Nintendo eShop regions (verified via nintendo-switch-eshop library v8.0.1)
-// Total: 43 officially supported regions (8 Americas + 34 Europe/Oceania + 1 Asia)
-const ALL_NINTENDO_REGIONS = {
-  // Americas (8 regions)
-  'US': { code: 'US', currency: 'USD', name: 'United States', difficult: false, giftCards: true, api: 'sales' },
-  'CA': { code: 'CA', currency: 'CAD', name: 'Canada', difficult: false, giftCards: true, api: 'sales' },
-  'MX': { code: 'MX', currency: 'MXN', name: 'Mexico', difficult: true, giftCards: true, api: 'sales' },
-  'BR': { code: 'BR', currency: 'BRL', name: 'Brazil', difficult: true, giftCards: true, api: 'library' },
-  'AR': { code: 'AR', currency: 'ARS', name: 'Argentina', difficult: true, giftCards: true, api: 'sales' },
-  'CL': { code: 'CL', currency: 'CLP', name: 'Chile', difficult: true, giftCards: false, api: 'sales' },
-  'CO': { code: 'CO', currency: 'COP', name: 'Colombia', difficult: true, giftCards: false, api: 'sales' },
-  'PE': { code: 'PE', currency: 'PEN', name: 'Peru', difficult: true, giftCards: false, api: 'sales' },
+// Cache for dynamic regions (1 hour)
+let dynamicRegionsCache = null;
+let regionsCacheExpiry = 0;
+
+// Regional metadata for purchase difficulty and gift card availability
+const REGION_METADATA = {
+  // Easy regions with gift card support
+  'US': { difficult: false, giftCards: true },
+  'CA': { difficult: false, giftCards: true },
+  'GB': { difficult: false, giftCards: true },
+  'DE': { difficult: false, giftCards: true },
+  'FR': { difficult: false, giftCards: true },
+  'IT': { difficult: false, giftCards: true },
+  'ES': { difficult: false, giftCards: true },
+  'NL': { difficult: false, giftCards: true },
+  'AU': { difficult: false, giftCards: true },
+  'DK': { difficult: false, giftCards: false },
+  'FI': { difficult: false, giftCards: false },
+  'SE': { difficult: false, giftCards: false },
+  'NZ': { difficult: false, giftCards: false },
+  'AT': { difficult: false, giftCards: false },
+  'PT': { difficult: false, giftCards: false },
+  'IE': { difficult: false, giftCards: false },
+  'LU': { difficult: false, giftCards: false },
+  'BE': { difficult: false, giftCards: false },
   
-  // Europe & Oceania (34 regions)
-  'GB': { code: 'GB', currency: 'GBP', name: 'United Kingdom', difficult: false, giftCards: true, api: 'sales' },
-  'DE': { code: 'DE', currency: 'EUR', name: 'Germany', difficult: false, giftCards: true, api: 'sales' },
-  'FR': { code: 'FR', currency: 'EUR', name: 'France', difficult: false, giftCards: true, api: 'sales' },
-  'IT': { code: 'IT', currency: 'EUR', name: 'Italy', difficult: false, giftCards: true, api: 'sales' },
-  'ES': { code: 'ES', currency: 'EUR', name: 'Spain', difficult: false, giftCards: true, api: 'sales' },
-  'NL': { code: 'NL', currency: 'EUR', name: 'Netherlands', difficult: false, giftCards: true, api: 'sales' },
-  'BE': { code: 'BE', currency: 'EUR', name: 'Belgium', difficult: false, giftCards: false, api: 'sales' },
-  'CH': { code: 'CH', currency: 'CHF', name: 'Switzerland', difficult: true, giftCards: false, api: 'sales' },
-  'AT': { code: 'AT', currency: 'EUR', name: 'Austria', difficult: false, giftCards: false, api: 'sales' },
-  'PT': { code: 'PT', currency: 'EUR', name: 'Portugal', difficult: false, giftCards: false, api: 'sales' },
-  'IE': { code: 'IE', currency: 'EUR', name: 'Ireland', difficult: false, giftCards: false, api: 'sales' },
-  'LU': { code: 'LU', currency: 'EUR', name: 'Luxembourg', difficult: false, giftCards: false, api: 'sales' },
-  'CZ': { code: 'CZ', currency: 'CZK', name: 'Czech Republic', difficult: true, giftCards: false, api: 'sales' },
-  'DK': { code: 'DK', currency: 'DKK', name: 'Denmark', difficult: false, giftCards: false, api: 'sales' },
-  'FI': { code: 'FI', currency: 'EUR', name: 'Finland', difficult: false, giftCards: false, api: 'sales' },
-  'GR': { code: 'GR', currency: 'EUR', name: 'Greece', difficult: true, giftCards: false, api: 'sales' },
-  'HU': { code: 'HU', currency: 'HUF', name: 'Hungary', difficult: true, giftCards: false, api: 'sales' },
-  'NO': { code: 'NO', currency: 'NOK', name: 'Norway', difficult: true, giftCards: false, api: 'sales' },
-  'PL': { code: 'PL', currency: 'PLN', name: 'Poland', difficult: true, giftCards: false, api: 'sales' },
-  'SE': { code: 'SE', currency: 'SEK', name: 'Sweden', difficult: false, giftCards: false, api: 'sales' },
-  'SK': { code: 'SK', currency: 'EUR', name: 'Slovakia', difficult: true, giftCards: false, api: 'sales' },
-  'SI': { code: 'SI', currency: 'EUR', name: 'Slovenia', difficult: true, giftCards: false, api: 'sales' },
-  'HR': { code: 'HR', currency: 'EUR', name: 'Croatia', difficult: true, giftCards: false, api: 'sales' },
-  'BG': { code: 'BG', currency: 'EUR', name: 'Bulgaria', difficult: true, giftCards: false, api: 'sales' },
-  'RO': { code: 'RO', currency: 'EUR', name: 'Romania', difficult: true, giftCards: false, api: 'sales' },
-  'EE': { code: 'EE', currency: 'EUR', name: 'Estonia', difficult: true, giftCards: false, api: 'sales' },
-  'LV': { code: 'LV', currency: 'EUR', name: 'Latvia', difficult: true, giftCards: false, api: 'sales' },
-  'LT': { code: 'LT', currency: 'EUR', name: 'Lithuania', difficult: true, giftCards: false, api: 'sales' },
-  'CY': { code: 'CY', currency: 'EUR', name: 'Cyprus', difficult: true, giftCards: false, api: 'sales' },
-  'MT': { code: 'MT', currency: 'EUR', name: 'Malta', difficult: true, giftCards: false, api: 'sales' },
-  'RU': { code: 'RU', currency: 'RUB', name: 'Russia', difficult: true, giftCards: true, api: 'sales' },
-  'AU': { code: 'AU', currency: 'AUD', name: 'Australia', difficult: false, giftCards: true, api: 'sales' },
-  'NZ': { code: 'NZ', currency: 'NZD', name: 'New Zealand', difficult: false, giftCards: false, api: 'sales' },
-  'ZA': { code: 'ZA', currency: 'ZAR', name: 'South Africa', difficult: true, giftCards: true, api: 'sales' },
+  // Difficult regions with gift cards
+  'MX': { difficult: true, giftCards: true },
+  'BR': { difficult: true, giftCards: true },
+  'AR': { difficult: true, giftCards: true },
+  'RU': { difficult: true, giftCards: true },
+  'ZA': { difficult: true, giftCards: true },
+  'JP': { difficult: true, giftCards: true },
+  'HK': { difficult: true, giftCards: true },
   
-  // Asia (2 regions - Japan and Hong Kong have official eShops)
-  'JP': { code: 'JP', currency: 'JPY', name: 'Japan', difficult: true, giftCards: true, api: 'library' },
-  'HK': { code: 'HK', currency: 'HKD', name: 'Hong Kong', difficult: true, giftCards: true, api: 'direct' }
-  
-  // NOTE: Singapore, South Korea, Taiwan, Thailand, Malaysia 
-  // DO NOT have official Nintendo eShops as of 2024
-  // They will get official support with Nintendo Switch 2 in 2025
-  // Hong Kong eShop launched April 3, 2018 and is operational but has API access limitations
+  // Difficult regions without gift cards (default for unlisted regions)
+  // All other regions default to: { difficult: true, giftCards: false }
 };
+
+async function getDynamicNintendoRegions() {
+  const now = Date.now();
+  
+  // Return cached data if still valid
+  if (dynamicRegionsCache && now < regionsCacheExpiry) {
+    return dynamicRegionsCache;
+  }
+  
+  console.log('[COMPREHENSIVE] Fetching dynamic regions from Nintendo API...');
+  
+  try {
+    const activeShops = await getActiveShops();
+    
+    // Transform API data into comprehensive regions format
+    const dynamicRegions = {};
+    
+    activeShops.forEach(shop => {
+      const metadata = REGION_METADATA[shop.code] || { difficult: true, giftCards: false };
+      
+      dynamicRegions[shop.code] = {
+        code: shop.code,
+        currency: shop.currency,
+        name: shop.country,
+        difficult: metadata.difficult,
+        giftCards: metadata.giftCards,
+        api: shop.code === 'BR' ? 'library' : 'sales',
+        region: shop.region
+      };
+    });
+    
+    // Add Hong Kong (has eShop but not in getActiveShops due to API limitations)
+    dynamicRegions['HK'] = { 
+      code: 'HK', 
+      currency: 'HKD', 
+      name: 'Hong Kong', 
+      difficult: true, 
+      giftCards: true, 
+      api: 'direct' 
+    };
+    
+    // Cache for 1 hour
+    dynamicRegionsCache = dynamicRegions;
+    regionsCacheExpiry = now + (60 * 60 * 1000);
+    
+    console.log(`[COMPREHENSIVE] Cached ${Object.keys(dynamicRegions).length} dynamic regions`);
+    return dynamicRegions;
+    
+  } catch (error) {
+    console.error(`[COMPREHENSIVE] Failed to fetch dynamic regions: ${error.message}`);
+    
+    // Return fallback regions if API fails
+    throw new Error('Failed to fetch dynamic Nintendo regions');
+  }
+}
+
+// Dynamic regions - will be populated when needed
+let ALL_NINTENDO_REGIONS = null;
 
 // Language mappings for sales API endpoints
 const REGION_LANGUAGES = {
@@ -79,6 +118,11 @@ const comprehensivePriceCache = new Map();
 const COMPREHENSIVE_CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 
 async function getComprehensivePricesForGame(game) {
+  // Get dynamic regions first
+  if (!ALL_NINTENDO_REGIONS) {
+    ALL_NINTENDO_REGIONS = await getDynamicNintendoRegions();
+  }
+  
   console.log(`[COMPREHENSIVE] Fetching prices for: ${game.title} across ALL ${Object.keys(ALL_NINTENDO_REGIONS).length} regions`);
   
   const cacheKey = `comprehensive_${game.nsuid}`;

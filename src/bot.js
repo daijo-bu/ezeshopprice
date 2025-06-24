@@ -1,5 +1,5 @@
 const TelegramBot = require('node-telegram-bot-api');
-const { searchGamesFinal: searchGames, searchGameByNSUIDFinal: searchGameByNSUID, getAllRegionsCount } = require('./eshopScraperFinal');
+const { searchGameOnEshopPrices } = require('./eshopPricesScraperImproved');
 const { formatPricesMessage, validateGameName, sanitizeGameName } = require('./utils');
 require('dotenv').config();
 
@@ -159,18 +159,18 @@ bot.on('message', (msg) => {
 
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
-  const totalRegions = getAllRegionsCount();
   const welcomeMessage = `Welcome to Nintendo eShop Price Bot! 🎮
 
 Use /price <game name> to get price comparison across ALL regions.
 Example: /price "The Legend of Zelda"
 
-🌍 I check prices across ${totalRegions} Nintendo eShop regions including:
+🌍 I get pricing data directly from eshop-prices.com, covering:
 • 🇺🇸 Americas (US, CA, MX, BR, AR, CL, CO, PE)
-• 🇪🇺 Europe & Oceania (GB, DE, FR, IT, ES, NL, BE, CH, AT, PT, IE, LU, CZ, DK, FI, GR, HU, NO, PL, SE, SK, SI, HR, BG, RO, EE, LV, LT, CY, MT, RU, AU, NZ, ZA)
-• 🇯🇵 Asia (JP, HK - other Asian regions will get eShops in 2025)
+• 🇪🇺 Europe & Oceania (40+ regions including GB, DE, FR, IT, ES, AU, etc.)
+• 🇯🇵 Asia (JP, HK, SG, KR, TW, TH, MY and more)
 
-💰 All prices converted to SGD and sorted by cheapest first!`;
+💰 All prices converted to SGD and sorted by cheapest first!
+📊 Data sourced from eshop-prices.com with 15-minute caching`;
   
   bot.sendMessage(chatId, welcomeMessage);
 });
@@ -186,11 +186,10 @@ bot.onText(/\/price (.+)/, async (msg, match) => {
   
   const gameName = sanitizeGameName(rawGameName);
   
-  const totalRegions = getAllRegionsCount();
-  const searchingMessage = await bot.sendMessage(chatId, `🔍 Searching Nintendo eShop for "${gameName}"...\n⏳ Checking prices across ${totalRegions} regions worldwide.`);
+  const searchingMessage = await bot.sendMessage(chatId, `🔍 Searching eshop-prices.com for "${gameName}"...\n⏳ This may take a moment as we get comprehensive pricing data.`);
   
   try {
-    const result = await searchGames(gameName);
+    const result = await searchGameOnEshopPrices(gameName);
     
     await bot.deleteMessage(chatId, searchingMessage.message_id).catch(() => {});
     
@@ -203,9 +202,6 @@ bot.onText(/\/price (.+)/, async (msg, match) => {
         bot.sendMessage(chatId, `🎮 *${result.game.title}*\n\n❌ ${result.message}`, { parse_mode: 'Markdown' });
         break;
         
-      case 'multiple_options':
-        await sendGameSelectionMessage(chatId, result);
-        break;
         
       case 'prices':
         const message = formatPricesMessage(result.game.title, result.prices);

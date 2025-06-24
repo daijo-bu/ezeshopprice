@@ -31,8 +31,8 @@ function formatPricesMessage(gameName, prices) {
   message += `\n💡 *Tip:* Prices are converted to SGD and sorted by cheapest first.`;
   message += `\n🔸 = Difficult to purchase from outside region`;
   message += `\n🎁 = Gift cards available (often discounted)`;
-  message += `\n🌍 *Coverage:* ${prices.length} regions found prices out of 44 total regions checked`;
-  message += `\n🕐 Data updated: ${new Date().toLocaleString('en-SG')}`;
+  message += `\n🌍 *Coverage:* ${prices.length} regions with pricing data available`;
+  message += `\n📊 Data from eshop-prices.com`;
 
   return message;
 }
